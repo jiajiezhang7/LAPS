@@ -1,0 +1,33 @@
+# check_and_clean_segments.py 默认配置
+# 可以根据数据情况调整阈值或其他参数
+
+root: /media/johnny/Data/data_motion_tokenizer/whole_d02_videos_segments_40s
+
+# ffmpeg 探针超时（秒）
+timeout: 20.0
+
+# 最大处理文件数（0 表示不限制）
+max_files: 0
+
+# 是否默认 dry-run（true 表示只预演不删除）
+dry_run: false
+
+workers: 64
+# 是否默认跳过静止检测
+skip_static_check: false
+
+# 输出详细日志
+verbose: false
+static_verbose: false
+
+# 静止检测参数（参考 amplify_motion_tokenizer/data_preprocessing/delete_static_videos.py）
+sample_count: 120
+sample_seconds: 4.0
+resize_shorter: 256
+diff_threshold: 0.015
+min_motion_ratio: 0.03
+max_mean_diff: 0.010
+max_diff: 0.03
+early_stop_ratio: 0.15
+check_interval: 6
+seek_threshold: 600

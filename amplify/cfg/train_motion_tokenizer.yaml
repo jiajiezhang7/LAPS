@@ -1,0 +1,92 @@
+# Train
+batch_size: 128 # batch size, will accumulate gradients if greater than gpu_max_bs
+gpu_max_bs: 32 # max batch size for gpu
+num_epochs: 100
+lr: 1e-4
+lr_schedule: null # cosine, null
+clip_grad: 0.0 # limit the norm of the gradients (0 = no clipping)
+weight_decay: 0.0 # penalize norm of the weights
+adam_betas: # betas for adam optimizer (momentum and variance)
+  - 0.9
+  - 0.95
+amp: true # automatic mixed precision
+compile: false
+root_dir: /home/johnny/johnny_ws/motion_tokenizer/preprocessed_data/custom_segments_d01
+train_split: 1.0
+log_interval: 500 # steps
+save_interval: 25 # epochs
+checkpoint: null
+resume: true # if no checkpoint is provided, resume from the latest checkpoint in the run directory (make sure run name is correct!)
+run_name: default_run_name
+
+# Wandb
+use_wandb: true
+wandb_group: amplify
+wandb_entity: jerryzhang7-shanghaitech-university
+wandb_project: motion-tokenizer # 为实验指定一个项目名称
+
+# Debug
+quick: true
+profile: false
+
+# Dataset
+libero_path: null # Absolute path to custom location of LIBERO datasets (defaults to LIBERO/libero/datasets)
+video_root: /media/johnny/Data/data_motion_tokenizer/whole_d01_videos_segments_40s # Optional: absolute path to the video root for CustomSegmentsDataset (used to locate original videos)
+# video_root: null
+train_datasets:
+  - custom_segments:traj1.0
+val_datasets: null
+task_names: null
+
+track_method: uniform_400_reinit_16
+cond_cameraviews:
+  - agentview
+  - eye_in_hand
+keys_to_load:
+  - tracks
+  # - images
+img_shape: [477, 470]
+true_horizon: 16
+track_pred_horizon: 16
+interp_method: linear # linear, spline
+num_tracks: 400
+num_workers: 4
+
+# Model
+type: transformer
+num_heads: 8
+num_layers: 2
+attn_pdrop: 0.1
+point_dim: 2
+hidden_dim: 768
+codebook_size: 2048
+causal_encoder: true
+decoder_mlp_hidden_dim: 256
+
+cond_on_img: false
+
+vision_encoder:
+  model_name: resnet18
+  frozen: true
+  lr_multiplier: 1.0
+  get_patches: true
+  get_cls_and_patches: false
+  patch_pooling: null # null, avg
+
+loss:
+  loss_fn: relative_ce # cross entropy across pixel=space velocities in a local window
+  loss_weights:
+    agentview: 0.9
+    eye_in_hand: 0.1
+    all: 1.0 # used for bridge
+    corner: 1.0
+    corner2: 1.0
+    front: 1.0
+    default: 1.0
+  cls_img_size: ${img_shape}
+  rel_cls_img_size: [15, 15]
+  num_angle_bins: null
+  num_mag_bins: null
+  max_polar_mag: null
+
+per_view: false # whether we have a separate token for each view

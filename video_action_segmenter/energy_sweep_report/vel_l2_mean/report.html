@@ -1,0 +1,33 @@
+
+<!DOCTYPE html><html><head><meta charset='utf-8'><title>Energy Report</title>
+<style>body{font-family:Arial;margin:20px} img{border:1px solid #ccc;margin-bottom:16px}</style></head>
+<body>
+<h1>Energy Analysis Report</h1>
+<div>Generated at 2025-09-22 14:22:01</div>
+<p>Labeling: velocity/l2_mean with thr=auto</p>
+<h3>time_series</h3>
+<img src="time_series.png" style="max-width:100%">
+<h3>histograms</h3>
+<img src="histograms.png" style="max-width:100%">
+<h3>boxplot</h3>
+<img src="boxplot.png" style="max-width:100%">
+<h3>correlation</h3>
+<img src="correlation.png" style="max-width:100%">
+<h3>roc_curves</h3>
+<img src="roc_curves.png" style="max-width:100%">
+<h2>Metrics</h2>
+<table border="1" cellspacing="0" cellpadding="4"><tr><th>source</th><th>mode</th><th>auc</th><th>d</th><th>ks</th><th>qgap_med</th><th>qgap_90_10</th><th>pearson_r</th><th>spearman_r</th><th>n_pos</th><th>n_neg</th><th>n_used</th></tr>
+<tr><td>prequant</td><td>l2_mean</td><td>0.6387</td><td>0.6620</td><td>0.4814</td><td>0.2266</td><td>1.4062</td><td>0.3004</td><td>0.1933</td><td>531</td><td>1469</td><td>2000</td></tr>
+<tr><td>prequant</td><td>token_diff_l2_mean</td><td>0.7337</td><td>0.9923</td><td>0.5796</td><td>0.5234</td><td>2.0953</td><td>0.4516</td><td>0.3711</td><td>531</td><td>1469</td><td>2000</td></tr>
+<tr><td>quantized</td><td>l2_mean</td><td>0.7046</td><td>0.6994</td><td>0.5640</td><td>0.2188</td><td>0.7438</td><td>0.2851</td><td>0.3336</td><td>531</td><td>1469</td><td>2000</td></tr>
+<tr><td>quantized</td><td>token_diff_l2_mean</td><td>0.9081</td><td>1.9506</td><td>0.7215</td><td>2.5156</td><td>4.2266</td><td>0.6969</td><td>0.8042</td><td>531</td><td>1469</td><td>2000</td></tr>
+<tr><td>velocity</td><td>l2_mean</td><td>1.0000</td><td>3.3128</td><td>1.0000</td><td>0.0330</td><td>0.0587</td><td>1.0000</td><td>1.0000</td><td>531</td><td>1469</td><td>2000</td></tr>
+<tr><td>velocity</td><td>token_diff_l2_mean</td><td>0.9249</td><td>1.8680</td><td>0.7587</td><td>0.0287</td><td>0.0524</td><td>0.6913</td><td>0.8390</td><td>531</td><td>1469</td><td>2000</td></tr></table>
+<h2>Downloads</h2>
+<ul>
+  <li><a href="metrics.json">metrics.json</a></li>
+  <li><a href="metrics.csv">metrics.csv</a></li>
+  <li><a href="descriptive_stats.csv">descriptive_stats.csv</a></li>
+  <li><a href="correlation.csv">correlation.csv</a></li>
+</ul>
+</body></html>

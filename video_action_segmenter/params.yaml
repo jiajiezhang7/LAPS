@@ -1,0 +1,125 @@
+# Real-time streaming params for Motion Tokenizer
+# 将 25fps 视频流按时间重采样到 20fps，维护 T=16 环形缓冲；stride=4 触发一次窗口
+
+# 模型权重与配置
+checkpoint_dir: "/home/johnny/johnny_ws/motion_tokenizer/checkpoints/train_20250917_172407"
+checkpoint_name: "best.pth"
+model_config: "./amplify_motion_tokenizer/configs/tokenizer_config.yaml"
+
+# 设备
+device: "auto"   # auto / cuda / cpu
+amp: true         # 启用 AMP 以提升推理速度（仅 CUDA 有效）
+
+auth: {}
+
+visualize: false
+
+# 输入源配置
+input:
+  type: "folder"   # camera | file | rtsp | folder
+  # camera_index: 0   # 当 type=camera 时有效
+  path: "/media/johnny/Data/data_motion_tokenizer/raw_videos_d01_910/D01_20250810153054.mp4"   # 当 type=file 时有效；若设置为目录且 type=file，会自动切换为 folder 模式
+  # url: "rtsp://user:pass@ip:port/stream"   # 当 type=rtsp 时有效
+  # 目录批处理（type=folder 时使用；或当 path 指向目录时也会使用）
+  dir: "/media/johnny/Data/data_motion_tokenizer/raw_videos_d01_910"  # 批处理目录
+  video_exts: [".mp4", ".mov", ".avi", ".mkv"]  # 支持的视频后缀（小写）
+  recursive: true  # 是否递归子目录
+  eof_timeout_seconds: 1.0  # 文件输入在连续无新帧超过该秒数时，判定为 EOF 并优雅退出当前视频
+  batch:
+    enable_parallel: true           # 是否在目录批处理模式下启用多 GPU 并行
+    gpu_ids: [0, 1]                 # 可用的物理 GPU 编号列表（例如两块 48GB GPU）
+    max_procs_per_gpu: 3            # 每块 GPU 同时运行的子进程数量
+    poll_interval_seconds: 0.2      # 轮询子进程完成状态的时间间隔（秒）
+
+# 采样与窗口
+# 记录数据： stride=4, resize_shorter=480, T=16 处理一个窗口需要0.35s
+
+target_fps: 20
+resize_shorter: 320   # 可改为 320 以降低跟踪耗时
+stride: 4             # 固定 4（确保与实时预算一致）
+
+debug_fsq: false
+
+# 静止窗口过滤（基于 CoTracker 速度阈值），用于在进入 Motion Tokenizer 前丢弃“全静止”窗口以节省计算
+motion_gate:
+  enable: true           # 启用静止窗口过滤
+  vel_norm_thr: 0.020    # 速度阈值（在 [-1,1] 归一化空间的 L2 均值阈值）
+  min_active_ratio: 0.025 # 活动关键点比例阈值（>thr 的点占比），低于该比例且均值低于阈值则认为“静止”
+  debug: false           # 打开后打印被丢弃窗口的统计
+
+# 前置像素差分快速门控（在 CoTracker 跟踪之前，极低开销）
+pre_gate:
+  enable: true              # 启用前置像素差分快速门控
+  resize_shorter: 128       # 先将短边缩放到该尺寸做差分，降低计算量
+  diff_method: mad          # 差分方法（当前仅 MAD 均值绝对差）
+  pixel_diff_thr: 0.02      # 像素差分阈值（灰度[0,1]）；用于计算活动像素占比
+  mad_thr: 0.005            # 帧间灰度差分 MAD 阈值
+  min_active_ratio: 0.05  # 活动像素比例阈值（>pixel_diff_thr 的像素占比）
+  debug: false              # 打印被丢弃窗口的 MAD/ratio 统计
+
+# 可选：流式输出 codes 到 JSONL（仅codes，便于联调）
+jsonl_output: false
+jsonl_path: "./video_action_segmenter/inference_outputs/stream_codes.jsonl"
+
+# UI 刷新帧率（用于显示窗口），默认等于 target_fps；如显示卡顿可降低
+display_fps: 20
+
+# 能量曲线配置（用于实时观测动作能量）
+energy:
+  enable: true                 # 是否计算窗口能量 E_t
+  source: "quantized"          # prequant | quantized | velocity --- best: quantized
+  mode: "token_diff_l2_mean"             # l2_mean | token_diff_l2_mean --- best: token_diff_l2_mean
+  jsonl_output: true          # 可选：是否另写一份能量 JSONL
+  jsonl_path: "./video_action_segmenter/energy_sweep_out/stream_energy_quantized_token_diff_l2_mean.jsonl"
+  visualize: false              # 是否开启实时能量曲线窗口
+  window_title: "Energy Curve"
+  viz_window: 400              # 曲线缓存长度（窗口个数）
+  plot_width: 720              # 曲线窗口宽度（近似正方形）
+  plot_height: 520             # 曲线窗口高度（近似正方形）
+  y_min: 11.3                  # 纵轴下限（根据你的观测可调整；设 null 则自适应）
+  y_max: 15.5                  # 纵轴上限（根据你的观测可调整；设 null 则自适应）
+  plot_color: [0, 255, 0]      # BGR 颜色
+
+  viz_style: enhanced
+  theme: academic_blue
+
+
+  # 可选：对能量序列 E_t 进行因果平滑（用于更稳的阈值分割/可视化）
+  smoothing:
+    enable: true            # 是否启用平滑（默认关闭，不改变当前行为）
+    method: "ema"            # ema | ma （推荐在线用 ema）
+    alpha: 0.7               # EMA 系数（0~1，越大越贴近当前值）
+    window: 3                # MA 窗口大小（仅当 method=ma 时使用）
+    use_for_seg: true        # 是否用“平滑后的 E”进行阈值分割
+    visualize_both: true     # 能量窗口叠加显示原始+平滑两条曲线
+
+# 基于能量阈值的实时分割与片段保存
+segmentation:
+  enable: true                  # 是否启用阈值分割与片段保存
+  mode: "report"                # fixed | report；report 模式会从报告JSON读取阈值
+  threshold: 10.625             # 当 mode=fixed 时使用；推荐 balanced thr=10.625，高召回 thr≈9.80
+  report_path: "./video_action_segmenter/energy_sweep_report/best_threshold_quantized_token_diff.json"
+  report_key: "quantized_token_diff_best.best_f1.thr"  # 可改为 quantized_token_diff_best.best_j.thr
+  min_len_windows: 2            # 片段最小连续正窗口数，低于此长度会丢弃
+  output_dir: "/media/johnny/Data/data_motion_tokenizer/online_inference_results_codebook2048_stride4"
+  codec: "mp4v"                 # OpenCV fourcc，如 mp4v/avc1/XVID
+  ext: ".mp4"                   # 输出文件扩展名
+  align: "center"               # start | center | end；center：首个正窗口仅写半窗（后半），减少起点偏移
+  # 分割护栏
+  hysteresis_ratio: 0.95        # 双阈值滞回：thr_off = thr_on * ratio（防桥接）
+  up_count: 2                   # 连续>=thr_on 才启动（去抖）
+  down_count: 2                 # 连续<thr_off 才结束（去抖）
+  cooldown_windows: 1           # 结束后冷却窗口数（禁止立刻重启）
+  max_duration_seconds: 2.0     # 单段最大时长上限（秒）；设0禁用。优先用秒，可选改用 max_duration_windows
+  # 片段 codes 导出配置（新增）
+  export_codes: true            # 是否导出片段对应的 code indices 为 .codes.json 旁文件
+  codes_min_overlap_ratio: 0.25 # 窗口与片段的最小重叠比例阈值（重叠帧数/T）；低于此比例的窗口不参与 codes 拼接
+  skip_if_exists: true
+  allow_overlap: true          # 新增：当为 true 时，导出 codes 不再去重叠；保存所有满足重叠比例阈值的候选窗口
+
+# 导出配置（可选）
+export:
+  prequant: false              # 是否导出未量化 latent (to_quantize)
+  prequant_dir: "./video_action_segmenter/inference_outputs/stream_prequant"
+
+max_windows: 0

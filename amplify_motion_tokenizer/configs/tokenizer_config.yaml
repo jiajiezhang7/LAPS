@@ -1,0 +1,89 @@
+# ---------------------------------------------------
+# AMPLIFY Motion Tokenizer - Configuration File
+# ---------------------------------------------------
+
+# 数据与预处理参数
+data:
+  video_source_dir: "/media/johnny/Data/data_motion_tokenizer/raw_videos_d01_910"             # 视频数据源目录（可选）
+  preprocess_output_dir: "/media/johnny/Data/data_motion_tokenizer/velocities_d01_for_train_filtered"  # 预处理输出目录（训练从此读取）
+  sequence_length: 16                                   # T, 跟踪与预测的时间窗口
+  grid_size: 20                                         # 关键点网格大小 (20x20)
+  num_points: 400                                       # N = grid_size * grid_size
+  # 验证集配置：二选一
+  # 1) 指定独立的验证目录；若为空则忽略
+  val_preprocess_output_dir: ""
+  # 2) 按比例从训练目录随机划分验证集（0~1），仅在未指定 val_preprocess_output_dir 时生效
+  val_split: 0.1
+
+  # 静态点忽略（可选）：在数据加载阶段按阈值产生掩码，训练/验证时忽略静态点；不改变原始 (T-1, N, 2) 的形状
+  # 若要启用，将 enable 设为 true；其他参数可按需微调
+  static_filter:
+    enable: true          # 是否启用静态点忽略
+    metric: "p95"          # 动态性度量："max" | "mean" | "p95"
+    threshold: 0.10        # 速度模长阈值（归一化尺度 [-1,1]），建议 0.02 ~ 0.10
+    min_keep: 16           # 每个片段至少保留的点数，防止极端情况下全部被过滤
+
+preprocess:
+  target_fps: 20                                        # 统一抽帧的目标帧率 (论文配置：16帧窗口，0.8s真实时间，对应20Hz帧率)
+  resize_shorter: 480                                   # 缩放短边到该尺寸（等比）。若为 0 则不缩放
+  
+  window_stride: 1                                      # 滑窗步长（帧）
+  segment_minutes: 10                                    # 使用 ffmpeg 分割的每段时长（分钟）
+  video_exts: [".mp4", ".mov", ".avi", ".mkv"]      # 支持的视频后缀
+  # preprocess_segments.py的输入文件夹路径
+  segments_dir: "/media/johnny/Data/data_motion_tokenizer/d01_samples_segments_for_train_mt" 
+  parallel_workers: 8                                   # 并行处理进程数
+  window_batch_size: 1                                # 滑窗批处理大小
+
+
+  pre_gate:
+    enable: true
+    resize_shorter: 128
+    diff_method: mad
+    pixel_diff_thr: 0.02
+    mad_thr: 0.005
+    min_active_ratio: 0.05
+    debug: true
+# 模型架构参数
+
+model:
+  # Encoder & Decoder 通用配置
+  num_layers: 2                                         # Transformer层数
+  num_heads: 8                                          # 多头注意力头数
+  hidden_dim: 768                                       # 隐藏层维度
+  dropout: 0.1                                          # Dropout率
+
+  # Encoder-specific
+  encoder_sequence_len: 16                              # 编码器输出的离散码序列长度 d
+
+  # FSQ 量化配置（levels的乘积应为有效码本大小，如 8*8*8*4 = 2048）
+  # 如果改为 1024，则推荐组合: [8, 8, 4, 4]
+  fsq_levels: [8, 8, 4, 4]
+  
+  # Decoder-specific
+  decoder_window_size: 15                               # W, 用于局部窗口分类。W^2 = 225
+  num_classes: 225                                      # W * W
+
+# 训练参数
+training:
+  batch_size: 256                                       # 可用 CLI 覆盖为更小以便快速验证
+  learning_rate: 0.0001
+  epochs: 100
+  optimizer: "AdamW"
+  device: "cuda"                                        # auto / cuda / cpu
+  num_workers: 8
+  checkpoint_dir: "./checkpoints"
+  log_interval: 10
+  # 训练性能增强
+  mixed_precision: "bf16"                                 # 选项: no / fp16 / bf16
+  gradient_accumulation_steps: 1
+
+  code_log_interval: 10            # 若未设置，将等于 log_interval
+  code_entropy_weight: 0.05        # 建议从 0.02 试起，越大，为了更多的码本利用率，但会增加训练难度
+  code_entropy_warmup_epochs: 10   # 线性 warmup 到设定权重
+
+  # 续训设置
+  resume: false
+  resume_from: "/home/johnny/johnny_ws/motion_tokenizer/checkpoints/train_20250917_140738/best.pth"
+  resume_optimizer: true      # 这次成功 run 没有保存 optimizer 状态也没关系；后续新 run 会保存
+  seed: 20250917               # 建议固定种子复现实验

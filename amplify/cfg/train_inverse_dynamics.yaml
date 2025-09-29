@@ -1,0 +1,92 @@
+# Train
+batch_size: 256 # batch size, will accumulate gradients if greater than gpu_max_bs
+gpu_max_bs: 256 # max batch size for gpu
+num_epochs: 250
+lr: 1e-4
+lr_schedule: null # cosine, null
+clip_grad: 1.0 # limit the norm of the gradients (0 = no clipping)
+weight_decay: 0.0 # penalize norm of the weights
+adam_betas: # betas for adam optimizer (momentum and variance)
+  - 0.9
+  - 0.95
+amp: true # automatic mixed precision
+seed: 0
+
+log_interval: 100 # steps
+save_interval: 25 # epochs
+checkpoint: null
+resume: true # if no checkpoint is provided, resume from the latest checkpoint in the run directory (make sure run name is correct!)
+compile: false
+root_dir: null
+run_name: default_run_name
+
+# Wandb
+use_wandb: false
+wandb_group: null
+wandb_entity: null
+wandb_project: null
+
+# Debug
+quick: false
+profile: false
+vis_recon: false
+
+# Track encoder
+motion_tokenizer_checkpoint: null
+
+# ForwardDynamics checkpoint (for finetuning)
+forward_dynamics_checkpoint: null
+
+# Dataset (rest of configs are copied from track encoder checkpoint)
+num_workers: 4
+train_datasets:
+  # - libero_10_demo:action0.8 # this loads tracks too, don't worry
+
+val_datasets:
+  # - libero_10_demo:action-0.2
+
+task_names: null
+
+# Model
+type: gaussian # gaussian, diffusion, flow
+diffusion_steps: 100 # used when type == diffusion
+flow_matching_steps: 100 # used when type == flow
+num_heads: 8
+num_layers: 4
+attn_pdrop: 0.1
+hidden_dim: null # set to match encoder config
+
+action_horizon: null # set to match encoder config
+action_dim: 7
+action_squash: true
+action_loss_discount: 0.99
+std: 0.1 # scalar, or "learned"
+action_squash_scale: 1.0 # scalar, or "learned"
+
+# real robot
+normalize_actions: min_max
+action_key: abs_actions
+
+# Conditioning
+cond_on_tracks: true # only turn off for bc baseline
+cond_on_proprio: true
+proprio_dim: 9
+cond_on_img: true
+num_img_tokens: null # set to match encoder config
+img_embed_dim: null # set to match encoder config
+
+vision_encoder:
+  model_name: resnet18
+  frozen: true
+  lr_multiplier: 1.0
+  get_patches: true
+  get_cls_and_patches: false
+  patch_pooling: null # null, avg
+
+cond_on_text: false
+text_embed_dim: null # set to match encoder config
+text_encoder:
+  size: small
+  frozen: true
+  return_all_tokens: false
+  use_preprocessed_embs: false

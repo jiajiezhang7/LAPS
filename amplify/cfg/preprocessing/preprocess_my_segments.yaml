@@ -1,0 +1,49 @@
+mode: tracks
+
+# CoTracker tracking parameters
+n_tracks: 400
+init_queries: uniform
+reinit: true
+horizon: 16
+batch_size: 32  # 推荐：48G 显存可先尝试 16，若 OOM 将自动退避
+precision: amp_auto      # 可选: fp32 | bf16 | fp16 | amp_auto（自动选择 bf16/fp16）
+auto_batch: true         # OOM 时自动将批量减半重试
+min_batch_size: 1
+
+# Source / destination
+source: /media/johnny/Data/data_motion_tokenizer/whole_d01_videos_segments_40s
+
+# 输出路径指定： 首先使用 output_dir，若 output_dir 未设置，则继续使用默认的 dest/dataset_name/extension 路径
+output_dir: /media/johnny/Data/data_motion_tokenizer/preprocessed_data_d01
+dest: preprocessed_data
+dataset_name: whole_d01_segments
+skip_exist: true
+recursive: true
+
+# Video preprocessing
+video_exts: [".mp4", ".mov", ".avi", ".mkv"]
+target_fps: 20
+resize_shorter: 480
+view_name: default
+max_files: null
+opencv_num_threads: 2     # OpenCV 解码线程（可选）：减少 CPU 线程争用
+
+# Debug
+verbose: true
+video_progress_desc: "MySegments"
+
+
+# Optional fields kept for parity with LIBERO config
+metric_depth: false
+depth_encoder: vitl
+depth_checkpoint_dir: checkpoints
+
+# Parallelization
+parallel:
+  enable_io_prefetch: true   # overlap video decoding (IO) with GPU tracking compute
+  io_workers: 48              # number of IO threads to decode frames
+  prefetch_buffer: 6        # max pending decoded samples buffered in memory
+  enable_multi_gpu: false     # enable DataParallel over available GPUs
+  multi_gpu_device_ids: [0, 1]  # preferred GPU device IDs (filtered if unavailable)
+  enable_multiprocess_gpu: true
+  mp_device_ids: [0, 1]

@@ -1,0 +1,27 @@
+__pycache__/
+*.pyc
+*.pth
+.checkpoints/
+checkpoints/
+*.log
+
+# venv
+.venv/
+.env/
+
+# data
+amplify_motion_tokenizer/data/
+
+# experiment results
+amplify_motion_tokenizer/inference_outputs/
+video_action_segmenter/inference_outputs/
+amplify_motion_tokenizer/action_classification/seq_embed/
+action_classification/seq_embed_infer/
+action_classification/analysis/out/
+action_classification/models/
+action_classification/analysis/code_indices/
+amplify_motion_tokenizer/analysis/
+action_classification/analysis/
+amplify/outputs/
+outputs/
+wandb/
