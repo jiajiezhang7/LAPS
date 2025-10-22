@@ -14,6 +14,7 @@ amplify.egg-info/top_level.txt
 amplify/loaders/__init__.py
 amplify/loaders/base_dataset.py
 amplify/loaders/custom_dataset.py
+amplify/loaders/custom_segments_dataset.py
 amplify/loaders/libero_dataset.py
 amplify/models/diffusion_policy.py
 amplify/models/dit.py

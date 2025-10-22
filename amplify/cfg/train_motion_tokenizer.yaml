@@ -11,7 +11,7 @@ adam_betas: # betas for adam optimizer (momentum and variance)
   - 0.95
 amp: true # automatic mixed precision
 compile: false
-root_dir: /home/johnny/johnny_ws/motion_tokenizer/preprocessed_data/custom_segments_d01
+root_dir: /home/jay/action_ws/data/preprocessed_data_d01
 train_split: 1.0
 log_interval: 500 # steps
 save_interval: 25 # epochs
@@ -31,21 +31,23 @@ profile: false
 
 # Dataset
 libero_path: null # Absolute path to custom location of LIBERO datasets (defaults to LIBERO/libero/datasets)
-video_root: /media/johnny/Data/data_motion_tokenizer/whole_d01_videos_segments_40s # Optional: absolute path to the video root for CustomSegmentsDataset (used to locate original videos)
+video_root: /home/jay/action_ws/data/raw_video_d01 # Optional: absolute path to the video root for CustomSegmentsDataset (used to locate original videos)
 # video_root: null
 train_datasets:
-  - custom_segments:traj1.0
-val_datasets: null
+  - custom_segments:traj0.8
+val_datasets:
+  - custom_segments:traj0.2
 task_names: null
 
 track_method: uniform_400_reinit_16
 cond_cameraviews:
-  - agentview
-  - eye_in_hand
+  # - agentview
+  # - eye_in_hand
+  - default
 keys_to_load:
   - tracks
-  # - images
-img_shape: [477, 470]
+  - images
+img_shape: [480, 771]
 true_horizon: 16
 track_pred_horizon: 16
 interp_method: linear # linear, spline

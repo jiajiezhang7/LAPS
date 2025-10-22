@@ -298,8 +298,8 @@ class CustomSegmentsDataset(BaseDataset):
         # images -> [0,1]
         if 'images' in self.keys_to_load and 'images' in data:
             data['images'] = data['images'] / 255.0
-            # 与 LIBERO 对齐：垂直翻转（viewer 习惯）；此处占位图不影响训练，仅用于可视化
-            data['images'] = np.flip(data['images'], axis=-3).copy()
+            # 注意：移除了 np.flip 操作，因为自定义数据不需要与 LIBERO 对齐
+            # 如果需要翻转，应在预处理阶段处理，而不是训练时
 
         # tracks/vis 规范化
         if 'tracks' in self.keys_to_load and 'tracks' in data:

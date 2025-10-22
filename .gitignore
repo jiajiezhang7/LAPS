@@ -25,3 +25,4 @@ action_classification/analysis/
 amplify/outputs/
 outputs/
 wandb/
+data/
