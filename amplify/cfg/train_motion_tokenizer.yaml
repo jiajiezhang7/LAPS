@@ -26,7 +26,7 @@ wandb_entity: jerryzhang7-shanghaitech-university
 wandb_project: motion-tokenizer # 为实验指定一个项目名称
 
 # Debug
-quick: true
+quick: false
 profile: false
 
 # Dataset
@@ -65,6 +65,9 @@ codebook_size: 2048
 causal_encoder: true
 decoder_mlp_hidden_dim: 256
 
+# Decoder positional/view embedding scale (reduce template bias)
+decoder_pos_scale: 0.2
+
 cond_on_img: false
 
 vision_encoder:
@@ -90,5 +93,17 @@ loss:
   num_angle_bins: null
   num_mag_bins: null
   max_polar_mag: null
+  # codebook usage regularization & focal loss (for imbalance)
+  codebook_diversity_weight: 0.05
+  use_focal: true
+  focal_gamma: 4.0
+  focal_alpha: 0.5
+  # radial class weighting to counter center dominance
+  class_weight_mode: radial   # none | radial
+  class_weight_strength: 2.0  # larger -> stronger upweighting of outer bins
+  class_weight_power: 2.0     # polynomial power for radial ramp
 
 per_view: false # whether we have a separate token for each view
+
+# small gaussian noise added to z before quantization (training only)
+z_noise_std: 0.01

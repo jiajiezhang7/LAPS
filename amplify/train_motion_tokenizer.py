@@ -60,7 +60,7 @@ def train_epoch(train_global_iter, model, train_loader, optimizer, scaler, devic
                 pass
 
             # Compute loss
-            loss = model.get_loss(x_recon=x_recon, rel_logits=rel_logits, gt_vel=x_gt, gt_traj=x)
+            loss = model.get_loss(x_recon=x_recon, rel_logits=rel_logits, gt_vel=x_gt, gt_traj=x, codebook_indices=codebook_indices)
 
         # Backprop
         scaler.scale(loss).backward()
@@ -134,7 +134,6 @@ def train_epoch(train_global_iter, model, train_loader, optimizer, scaler, devic
                     code_hist = None
 
                 logger.log({
-                    "train_reconstructions": [wandb.Image(combined_img)],
                     "train_codebook_perplexity": codebook_perplexity,
                     "train_unique_codes_step": unique_codes,
                     "train_entropy_step": float(entropy.item()),
@@ -146,7 +145,6 @@ def train_epoch(train_global_iter, model, train_loader, optimizer, scaler, devic
             except Exception:
                 # Fallback: log without the additional codebook stats
                 logger.log({
-                    "train_reconstructions": [wandb.Image(combined_img)],
                     "train_codebook_perplexity": codebook_perplexity,
                 }, train_global_iter, flatten=False)
 
@@ -173,7 +171,7 @@ def val_epoch(val_global_iter, model, val_loader, device, logger, cfg):
                 x_recon, codebook_indices, rel_logits = model(x_gt)
 
             # Compute loss, metrics
-            loss = model.get_loss(x_recon=x_recon, rel_logits=rel_logits, gt_vel=x_gt, gt_traj=x)
+            loss = model.get_loss(x_recon=x_recon, rel_logits=rel_logits, gt_vel=x_gt, gt_traj=x, codebook_indices=codebook_indices)
 
         val_loss += loss.detach()
 
@@ -199,7 +197,7 @@ def val_epoch(val_global_iter, model, val_loader, device, logger, cfg):
             combined_img = np.concatenate([gt_img[0], vis_img[0]], axis=0)
             # plt.imshow(combined_img)
             # plt.show()
-            logger.log({"val_reconstructions": [wandb.Image(combined_img)]}, val_global_iter, phase='val',flatten=False)
+            pass
 
         val_global_iter += cfg.gpu_max_bs
 

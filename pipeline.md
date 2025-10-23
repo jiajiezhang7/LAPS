@@ -25,21 +25,18 @@
     - 具体配置请修改 `amplify/cfg/preprocessing/preprocess_my_segments.yaml`
     - 在 `amplify` 目录下运行 `python -m preprocessing.preprocess_my_segments`
 
+  - 重新生成FPS=10的数据，为了尝试解决codebook坍塌问题：
+  python -m amplify.preprocessing.preprocess_my_segments \
+    mode=tracks \
+    source=/home/jay/action_ws/data/raw_video_d01 \
+    output_dir=/home/jay/action_ws/data/preprocessed_data_d01_m10 \
+    n_tracks=400 init_queries=uniform reinit=true \
+    horizon=16 target_fps=10 resize_shorter=480 \
+    skip_exist=true verbose=true
+
+
 
 ### Train
-
-- 冒烟测试 (在新机器上成功)
-  python amplify/train_motion_tokenizer.py \
-  root_dir=/home/jay/action_ws/data/preprocessed_data_d01 \
-  train_datasets=[custom_segments:traj1.0] \
-  val_datasets=null \
-  cond_cameraviews=[default] \
-  keys_to_load=[tracks,images] \
-  true_horizon=16 track_pred_horizon=16 \
-  batch_size=8 gpu_max_bs=8 num_epochs=1 \
-  quick=true num_workers=2 log_interval=16 \
-  resume=false run_name=smoke_custom_d01 \
-  use_wandb=true lr_schedule=null
 
 - quick test 
   python amplify/train_motion_tokenizer.py \
@@ -62,6 +59,19 @@
   quick=false num_workers=4 log_interval=16 \
   resume=false run_name=new_complete_train_1022_d01_bs8 \
   use_wandb=true lr_schedule=null
+
+- codebook collapse test (我希望用到少量部分数据，而不是全部数据)
+  python amplify/train_motion_tokenizer.py \
+    root_dir=/home/jay/action_ws/data/preprocessed_data_d01 \
+    train_datasets=[custom_segments:traj0.1] \
+    val_datasets=[custom_segments:traj0.05] \
+    cond_cameraviews=[default] \
+    keys_to_load=[tracks,images] \
+    true_horizon=16 track_pred_horizon=16 \
+    batch_size=8 gpu_max_bs=8 num_epochs=2 \
+    quick=false num_workers=4 log_interval=16 \
+    resume=false run_name=codebook_collapse_regularization_focal_test_d01 \
+    use_wandb=true lr_schedule=null
 
 #### CoTracker可视化
 

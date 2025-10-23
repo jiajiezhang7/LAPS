@@ -187,6 +187,10 @@ class VAEDecoder(nn.Module):
         track_pos = repeat(track_pos, 'n h -> 1 1 1 n h')
         view_pos = self.view_emb(torch.arange(self.views, device=codes.device))
         view_pos = repeat(view_pos, 'v h -> 1 v 1 1 h')
+        # apply optional positional scaling
+        pos_scale = getattr(self, 'pos_scale', 1.0)
+        track_pos = track_pos * pos_scale
+        view_pos = view_pos * pos_scale
 
         if self.per_view:
             x_recon = rearrange(x_recon, 'b (v t) h -> b v t 1 h', v=self.views)
@@ -248,6 +252,11 @@ class MotionTokenizer(nn.Module):
                     out_dim=out_dim,
                     per_view=cfg.per_view,
                 )
+                # scale positional/view embeddings to reduce template bias
+                try:
+                    self.decoder.pos_scale = float(getattr(cfg, 'decoder_pos_scale', 1.0) or 1.0)
+                except Exception:
+                    self.decoder.pos_scale = 1.0
         else:
             raise ValueError(f"Unknown type: {type}")
 
@@ -273,6 +282,14 @@ class MotionTokenizer(nn.Module):
             z = self.encoder(x, cond)
         else:
             z = self.encoder(x)
+        # inject small Gaussian noise before quantization during training to encourage code exploration
+        try:
+            if self.training:
+                std = float(getattr(self.cfg, 'z_noise_std', 0.0) or 0.0)
+                if std > 0:
+                    z = z + std * torch.randn_like(z)
+        except Exception:
+            pass
         return z
 
 
@@ -292,7 +309,7 @@ class MotionTokenizer(nn.Module):
         return x_recon, rel_logits
 
 
-    def get_loss(self, x_recon, rel_logits, gt_vel, gt_traj):
+    def get_loss(self, x_recon, rel_logits, gt_vel, gt_traj, codebook_indices=None):
         assert self.cfg.loss.loss_fn == 'relative_ce', 'Unsupported loss function'
         unreduced_loss = compute_relative_classification_loss(rel_logits, gt_traj[:, :, 1:], gt_traj[:, :, :-1], self.cfg.loss)
         unreduced_loss = unreduced_loss.unsqueeze(-1)
@@ -301,6 +318,44 @@ class MotionTokenizer(nn.Module):
         loss = 0.
         for i, view in enumerate(self.cfg.cond_cameraviews):
             loss += view_loss[i] * self.cfg.loss.loss_weights[view]
+
+        # Optional codebook diversity regularization (entropy-based)
+        try:
+            div_w = float(getattr(self.cfg.loss, 'codebook_diversity_weight', 0.0) or 0.0)
+        except Exception:
+            div_w = 0.0
+
+        if codebook_indices is not None and div_w > 0.0:
+            try:
+                x = codebook_indices.detach()
+                code_ids = None
+                # Heuristic: FSQ digits live on the last dim (<=8) with small ranges (<32)
+                if x.dim() >= 2 and x.shape[-1] <= 8 and x.max() < 32:
+                    digits = x.reshape(-1, x.shape[-1]).to(torch.long)
+                    if digits.numel() > 0:
+                        levels = torch.maximum(digits.max(dim=0).values, torch.zeros(digits.size(1), dtype=torch.long, device=digits.device)) + 1
+                        weights = torch.ones_like(levels)
+                        cur = 1
+                        for j in range(levels.numel()):
+                            weights[j] = cur
+                            cur *= int(levels[j].item())
+                        code_ids = (digits * weights.view(1, -1)).sum(dim=-1)
+                if code_ids is None:
+                    code_ids = x.reshape(-1).to(torch.long)
+
+                uids, ucounts = torch.unique(code_ids, return_counts=True)
+                total = ucounts.sum().clamp_min(1.0).float()
+                p = (ucounts.float() / total)
+                nz = p > 0
+                entropy = -(p[nz] * p[nz].log()).sum()  # nats
+                # Normalize by log(K_eff)
+                K_eff = int(max(int(uids.max().item() + 1), int(getattr(self.cfg, 'codebook_size', 0) or 0), 1))
+                entropy_norm = entropy / math.log(float(max(K_eff, 2)))
+
+                loss = loss + div_w * (1.0 - entropy_norm)
+            except Exception:
+                # do not break training if stats fail
+                pass
 
         return loss
 
