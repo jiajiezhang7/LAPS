@@ -1,0 +1,9 @@
+data:
+  video_source_dir: "/media/johnny/Data/data_motion_tokenizer/raw_videos_d02_910"
+
+preprocess:
+  segment_minutes: 10
+  video_exts: [".mp4", ".mov", ".avi", ".mkv", ".mpg", ".mpeg"]
+  segments_dir: "/media/johnny/Data/data_motion_tokenizer/raw_videos_d02_910_segments"
+  parallel_workers: 4
+  skip_if_exists: false

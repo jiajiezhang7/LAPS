@@ -41,6 +41,10 @@ def train_epoch(train_global_iter, model, train_loader, optimizer, scaler, devic
     grad_accum = math.ceil(cfg.batch_size / cfg.gpu_max_bs) # number of gradient accumulations
     train_loss = 0
     optimizer.zero_grad(set_to_none=True)
+    K = int(getattr(cfg, 'codebook_size', 0) or 0)
+    track_codebook_epoch = K > 0
+    if track_codebook_epoch:
+        train_epoch_seen = torch.zeros(K, dtype=torch.bool)
 
     for batch_idx, batch in enumerate(tqdm(train_loader, desc="Training")):
         x = batch['traj'].to(device)
@@ -73,6 +77,30 @@ def train_epoch(train_global_iter, model, train_loader, optimizer, scaler, devic
             optimizer.zero_grad(set_to_none=True)
 
         train_loss += loss.detach()
+
+        if track_codebook_epoch:
+            try:
+                cbx = codebook_indices.detach()
+                code_ids = None
+                if cbx.dim() >= 2 and cbx.shape[-1] <= 8 and cbx.max() < 32:
+                    digits = cbx.reshape(-1, cbx.shape[-1]).to(torch.long)
+                    if digits.numel() > 0:
+                        levels = torch.maximum(digits.max(dim=0).values, torch.zeros(digits.size(1), dtype=torch.long, device=digits.device)) + 1
+                        weights = torch.ones_like(levels)
+                        cur = 1
+                        for j in range(levels.numel()):
+                            weights[j] = cur
+                            cur *= int(levels[j].item())
+                        code_ids = (digits * weights.view(1, -1)).sum(dim=-1)
+                if code_ids is None:
+                    code_ids = cbx.reshape(-1).to(torch.long)
+                uids = torch.unique(code_ids)
+                if K > 0:
+                    uids = uids[(uids >= 0) & (uids < K)]
+                    if uids.numel() > 0:
+                        train_epoch_seen[uids.cpu()] = True
+            except Exception:
+                pass
 
         x_recon = rel_cls_logits_to_diffs(
                 logits=rel_logits,
@@ -152,12 +180,26 @@ def train_epoch(train_global_iter, model, train_loader, optimizer, scaler, devic
 
     avg_train_loss = train_loss.item() / len(train_loader)
 
+    if track_codebook_epoch:
+        unique_epoch = int(train_epoch_seen.sum().item())
+        dead_count = int(K - unique_epoch)
+        dead_ratio = float(dead_count / K) if K > 0 else 0.0
+        logger.log({
+            "train_unique_codes_epoch": unique_epoch,
+            "train_dead_codes_count_epoch": dead_count,
+            "train_dead_code_ratio_epoch": dead_ratio,
+        }, train_global_iter, phase='train', flatten=False)
+
     return avg_train_loss, train_global_iter
 
 @torch.no_grad()
 def val_epoch(val_global_iter, model, val_loader, device, logger, cfg):
     model.eval()
     val_loss = 0
+    K = int(getattr(cfg, 'codebook_size', 0) or 0)
+    track_codebook_epoch = K > 0
+    if track_codebook_epoch:
+        val_epoch_seen = torch.zeros(K, dtype=torch.bool)
     for batch_idx, batch in enumerate(tqdm(val_loader, desc="Validation")):
         x = batch['traj'].to(device)
 
@@ -174,6 +216,30 @@ def val_epoch(val_global_iter, model, val_loader, device, logger, cfg):
             loss = model.get_loss(x_recon=x_recon, rel_logits=rel_logits, gt_vel=x_gt, gt_traj=x, codebook_indices=codebook_indices)
 
         val_loss += loss.detach()
+
+        if track_codebook_epoch:
+            try:
+                cbx = codebook_indices.detach()
+                code_ids = None
+                if cbx.dim() >= 2 and cbx.shape[-1] <= 8 and cbx.max() < 32:
+                    digits = cbx.reshape(-1, cbx.shape[-1]).to(torch.long)
+                    if digits.numel() > 0:
+                        levels = torch.maximum(digits.max(dim=0).values, torch.zeros(digits.size(1), dtype=torch.long, device=digits.device)) + 1
+                        weights = torch.ones_like(levels)
+                        cur = 1
+                        for j in range(levels.numel()):
+                            weights[j] = cur
+                            cur *= int(levels[j].item())
+                        code_ids = (digits * weights.view(1, -1)).sum(dim=-1)
+                if code_ids is None:
+                    code_ids = cbx.reshape(-1).to(torch.long)
+                uids = torch.unique(code_ids)
+                if K > 0:
+                    uids = uids[(uids >= 0) & (uids < K)]
+                    if uids.numel() > 0:
+                        val_epoch_seen[uids.cpu()] = True
+            except Exception:
+                pass
 
         x_recon = rel_cls_logits_to_diffs(
                 logits=rel_logits,
@@ -202,6 +268,16 @@ def val_epoch(val_global_iter, model, val_loader, device, logger, cfg):
         val_global_iter += cfg.gpu_max_bs
 
     avg_val_loss = val_loss.item() / len(val_loader)
+
+    if track_codebook_epoch:
+        unique_epoch = int(val_epoch_seen.sum().item())
+        dead_count = int(K - unique_epoch)
+        dead_ratio = float(dead_count / K) if K > 0 else 0.0
+        logger.log({
+            "val_unique_codes_epoch": unique_epoch,
+            "val_dead_codes_count_epoch": dead_count,
+            "val_dead_code_ratio_epoch": dead_ratio,
+        }, val_global_iter, phase='val', flatten=False)
 
     return avg_val_loss, val_global_iter
 

@@ -1,3 +1,6 @@
+### 依赖安装
+- 以 amplify/README.md 为准
+
 ### 整个项目的结构
 - amplify
     - 这个是一份开源代码，主要使用到其 Motion Tokenizer相关的训练和推理部分，关键是amplify/train_motion_tokenizer.py
@@ -9,4 +12,4 @@
 
 ## 目前项目的核心瓶颈
 
-- Motion Tokenizer训练时 codebook 坍塌
+- Motion Tokenizer训练时 codebook 坍塌 （已解决坍塌，但是正在提升codebook利用率）

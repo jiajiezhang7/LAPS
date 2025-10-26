@@ -14,13 +14,11 @@ import sys
 import subprocess
 from queue import Queue, Empty
 
-from amplify_motion_tokenizer.utils.helpers import load_config, get_device
-from amplify_motion_tokenizer.models.motion_tokenizer import MotionTokenizer
-# 复用已有推理工具函数，避免重复实现
-from amplify_motion_tokenizer.inference_short_clip import (
-    _normalize_velocities,  # 速度归一化到 [-1,1]
-    _fsq_digits_to_ids,     # FSQ digits 合并为单一 code id
-)
+from omegaconf import OmegaConf
+import yaml
+from amplify.models.motion_tokenizer import MotionTokenizer
+from amplify.utils.cfg_utils import get_device
+from amplify.utils.train import unwrap_compiled_state_dict
 from video_action_segmenter.stream_utils import (
     TimeResampler,
     resize_shorter_keep_aspect,
@@ -47,6 +45,16 @@ from video_action_segmenter.stream_utils import (
 )
 
 
+def load_config(config_path):
+    """Load YAML config file"""
+    with open(config_path, 'r') as f:
+        return yaml.safe_load(f)
+
+def _normalize_velocities(vel_pix, window_size):
+    """Normalize velocities to [-1, 1] range based on window size"""
+    # vel_pix: (T-1, N, 2) on CPU
+    return vel_pix / (window_size / 2.0)
+
 def build_argparser():
     p = argparse.ArgumentParser(description="Real-time streaming inference for Motion Tokenizer (20Hz resample, T=16, stride=4)")
     p.add_argument("--params", type=str, default=str(Path(__file__).resolve().with_name("params.yaml")), help="YAML 配置文件路径")
@@ -59,7 +67,12 @@ def run_streaming(args):
     cfg = load_config(args.params)
 
     # 设备
-    device = get_device(args.device or cfg.get("device", "auto"))
+    device_str = args.device or cfg.get("device", "auto")
+    if device_str == "auto":
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    else:
+        device = torch.device(device_str)
+    
     if device.type == "cuda" and args.gpu_id is not None:
         device = torch.device(f"cuda:{args.gpu_id}")
         try:
@@ -67,27 +80,48 @@ def run_streaming(args):
         except Exception:
             pass
 
-    # 模型加载
-    checkpoint_dir = Path(cfg["checkpoint_dir"]).resolve()
-    checkpoint_name = str(cfg.get("checkpoint_name", "best.pth"))
-    model_config_path = Path(cfg["model_config"]).resolve()
-    model_cfg = load_config(str(model_config_path))
-
-    model = MotionTokenizer(model_cfg).to(device)
-    ckpt_path = checkpoint_dir / checkpoint_name
-    if not ckpt_path.exists():
-        raise FileNotFoundError(f"未找到权重文件: {ckpt_path}")
-    state = torch.load(ckpt_path, map_location=device)
-    model.load_state_dict(state, strict=True)
+    # 模型加载 - 新的 amplify 框架
+    checkpoint_path = Path(cfg["checkpoint_path"]).resolve()
+    if not checkpoint_path.exists():
+        raise FileNotFoundError(f"未找到权重文件: {checkpoint_path}")
+    
+    # Load checkpoint
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    model_cfg = OmegaConf.create(checkpoint['config'])
+    
+    # Handle compiled models
+    if model_cfg.get('compile', False) or "_orig_mod." in str(list(checkpoint['model'].keys())[0]):
+        checkpoint['model'] = unwrap_compiled_state_dict(checkpoint['model'])
+    
+    # Create model
+    model = MotionTokenizer(model_cfg, load_encoder=True, load_decoder=True).to(device)
+    model.load_state_dict(checkpoint['model'], strict=False)
     model.eval()
+    
+    print(f"[Model] Loaded checkpoint from: {checkpoint_path}")
+    print(f"[Model] Checkpoint epoch: {checkpoint.get('epoch', 'unknown')}")
 
-    # 关键参数
-    T = int(model_cfg['data']['sequence_length'])  # 预计为 16
-    grid_size = int(model_cfg['data']['grid_size'])
-    N = int(model_cfg['data']['num_points'])
-    assert N == grid_size * grid_size, f"num_points ({N}) 必须等于 grid_size^2 ({grid_size*grid_size})"
-    W_dec = int(model_cfg['model']['decoder_window_size'])
-    fsq_levels = list(model_cfg['model'].get('fsq_levels', []))
+    # 关键参数 - 从新配置结构中提取
+    T = int(model_cfg.track_pred_horizon) - 1  # -1 because velocity
+    grid_size = int(np.sqrt(model_cfg.num_tracks))  # Infer from num_tracks
+    N = int(model_cfg.num_tracks)
+    W_dec = 480  # Default window size for normalization (can be overridden in cfg)
+    if 'decoder_window_size' in cfg:
+        W_dec = int(cfg['decoder_window_size'])
+    
+    # Get FSQ levels from codebook size
+    codebook_size = int(model_cfg.codebook_size)
+    power = int(np.log2(codebook_size))
+    if power == 11:  # 2048 = 2^11
+        fsq_levels = [8, 8, 6, 5]  # From get_fsq_level function
+    elif power == 10:  # 1024
+        fsq_levels = [8, 5, 5, 5]
+    elif power == 12:  # 4096
+        fsq_levels = [7, 5, 5, 5, 5]
+    else:
+        fsq_levels = []  # Will be inferred from data if needed
+    
+    print(f"[Model] T={T}, N={N}, grid_size={grid_size}, codebook_size={codebook_size}, fsq_levels={fsq_levels}")
 
     target_fps = int(cfg.get("target_fps", 20))
     resize_shorter = int(cfg.get("resize_shorter", 480))
@@ -569,10 +603,11 @@ def run_streaming(args):
                                 pass
                         continue  # 跳过后续模型前向
 
-                # 手动执行模型编码与量化，以便拿到未量化 latent（to_quantize）
-                # 形状：vel_norm: (T-1,N,2) -> x: (1, S, 2) -> to_quantize: (1, d, D)
+                # 使用新模型的 encode/quantize API
+                # 新模型期望输入: (B, V, T, N, D) 其中 V=views, T=时间步, N=点数, D=2(xy坐标)
+                # vel_norm: (T-1, N, 2) -> reshape to (1, 1, T-1, N, 2)
                 Tm1, N_local, _ = vel_norm.shape
-                x = vel_norm.unsqueeze(0).reshape(1, Tm1 * N_local, 2).to(device)
+                x_input = vel_norm.unsqueeze(0).unsqueeze(0).to(device)  # (1, 1, T-1, N, 2)
 
                 # AMP autocast（仅 CUDA 且 amp=True 有效）
                 try:
@@ -588,72 +623,35 @@ def run_streaming(args):
                 # 推理模式可进一步减少版本计数与内存占用
                 with torch.inference_mode():
                     with autocast_ctx:
-                        x = model.input_projection(x)
-                        x = x + model.pos_embed
-                        # 注意：model.causal_mask 是 register_buffer，随 model.to(device) 已迁移到 GPU；
-                        # 避免在循环内重复 .to(device) 造成大张量反复分配
-                        encoded = model.encoder(x, mask=model.causal_mask)
-                        proj_in = encoded.transpose(1, 2)
-                        proj_out = model.encoder_output_projection(proj_in)
-                        to_quantize = proj_out.transpose(1, 2)  # (1, d, D)
-
-                        # 量化（兼容不同 FSQ 返回形式）
-                        fsq_indices = None
-                        try:
-                            if getattr(model, "_quantizer_support_return_indices", False):
-                                quant_out = model.quantizer(to_quantize, return_indices=True)
-                            else:
-                                quant_out = model.quantizer(to_quantize)
-                        except TypeError:
-                            quant_out = model.quantizer(to_quantize)
-
-                        if isinstance(quant_out, (tuple, list)):
-                            quantized = None
-                            for item in quant_out:
-                                if isinstance(item, torch.Tensor):
-                                    if item.dtype in (torch.float16, torch.bfloat16, torch.float32, torch.float64):
-                                        quantized = item
-                                    elif item.dtype in (torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8, torch.bool):
-                                        fsq_indices = item
-                            if quantized is None:
-                                quantized = quant_out[0] if isinstance(quant_out[0], torch.Tensor) else torch.as_tensor(quant_out[0], device=to_quantize.device)
-                        else:
-                            quantized = quant_out
+                        # Encode to latent space (before quantization)
+                        to_quantize = model.encode(x_input, cond=None)  # (B, seq_len, hidden_dim)
+                        
+                        # Quantize using FSQ
+                        quantized, fsq_indices = model.quantize(to_quantize)  # FSQ returns (quantized, indices)
 
                 t_forward = time.perf_counter() - t1
 
                 # 计算 codes（如可用）
+                # 新的 FSQ 直接返回合并后的 code IDs: (B, seq_len)
                 code_ids_seq_list = None
                 used_digits_merge = False
-                if isinstance(fsq_indices, torch.Tensor) and len(fsq_levels) > 0:
+                if isinstance(fsq_indices, torch.Tensor):
                     try:
-                        code_ids_seq = _fsq_digits_to_ids(fsq_indices, fsq_levels).to(torch.int16)
-                        xi = fsq_indices.detach().cpu()
-                        if xi.dim() == 2 and (xi.shape[-1] == len(fsq_levels) or xi.shape[0] == len(fsq_levels)):
-                            used_digits_merge = True
+                        # fsq_indices: (1, seq_len) -> flatten to (seq_len,)
+                        code_ids_seq = fsq_indices.squeeze(0).to(torch.int16)  # (seq_len,)
                         code_ids_seq_list = [int(v) for v in code_ids_seq.tolist()]
-                    except Exception:
+                        used_digits_merge = True  # FSQ already merged digits internally
+                    except Exception as e:
+                        print(f"[Stream][WARN] FSQ code conversion failed: {e}")
                         code_ids_seq_list = None
-                # 释放 FSQ 索引（若在 GPU 上）
-                try:
-                    del fsq_indices
-                except Exception:
-                    pass
-
+                
                 # 在 GPU 上的中间张量：显式转移到 CPU，尽快释放显存
-                to_quantize_cpu = to_quantize.detach().cpu() if 'to_quantize' in locals() and isinstance(to_quantize, torch.Tensor) else None
-                quantized_cpu = quantized.detach().cpu() if 'quantized' in locals() and isinstance(quantized, torch.Tensor) else None
+                to_quantize_cpu = to_quantize.detach().cpu() if isinstance(to_quantize, torch.Tensor) else None
+                quantized_cpu = quantized.detach().cpu() if isinstance(quantized, torch.Tensor) else None
+                
                 # 显式删除大中间变量，减少 CUDA caching allocator 的峰值
                 try:
-                    del x
-                except Exception:
-                    pass
-                try:
-                    del encoded, proj_in, proj_out
-                except Exception:
-                    pass
-                try:
-                    del to_quantize, quantized
+                    del x_input, to_quantize, quantized, fsq_indices
                 except Exception:
                     pass
 

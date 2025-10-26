@@ -5,24 +5,24 @@ n_tracks: 400
 init_queries: uniform
 reinit: true
 horizon: 16
-batch_size: 1 
+batch_size: 8 
 precision: amp_auto      # 可选: fp32 | bf16 | fp16 | amp_auto（自动选择 bf16/fp16）
 auto_batch: true         # OOM 时自动将批量减半重试
 min_batch_size: 1
 
 # Source / destination
-source: /home/jay/action_ws/data/raw_video_d01
+source: /media/johnny/48FF-AA60/raw_videos_d02_segments
 
 # 输出路径指定： 首先使用 output_dir，若 output_dir 未设置，则继续使用默认的 dest/dataset_name/extension 路径
-output_dir: /home/jay/action_ws/data/preprocessed_data_d01_m10
+output_dir: /media/johnny/48FF-AA60/preprocessed_data_d02_m10
 dest: preprocessed_data
-dataset_name: whole_d01_segments
+dataset_name: whole_d02_segments
 skip_exist: true
 recursive: true
 
 # Video preprocessing
 video_exts: [".mp4", ".mov", ".avi", ".mkv"]
-target_fps: 20
+target_fps: 10
 resize_shorter: 480
 view_name: default
 max_files: null
@@ -40,8 +40,8 @@ depth_checkpoint_dir: checkpoints
 
 # Parallelization
 parallel:
-  enable_io_prefetch: false   # overlap video decoding (IO) with GPU tracking compute
-  io_workers: 4              # number of IO threads to decode frames
+  enable_io_prefetch: true   # overlap video decoding (IO) with GPU tracking compute
+  io_workers: 8              # number of IO threads to decode frames
   prefetch_buffer: 2        # max pending decoded samples buffered in memory
   enable_multi_gpu: false     # enable DataParallel over available GPUs
   multi_gpu_device_ids: [0, 1]  # preferred GPU device IDs (filtered if unavailable)

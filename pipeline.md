@@ -28,19 +28,18 @@
   - 重新生成FPS=10的数据，为了尝试解决codebook坍塌问题：
   python -m amplify.preprocessing.preprocess_my_segments \
     mode=tracks \
-    source=/home/jay/action_ws/data/raw_video_d01 \
-    output_dir=/home/jay/action_ws/data/preprocessed_data_d01_m10 \
     n_tracks=400 init_queries=uniform reinit=true \
     horizon=16 target_fps=10 resize_shorter=480 \
     skip_exist=true verbose=true
-
+  
+  - [TODO]: 在target_fps=10的情况下（新生成的数据将是preprocessed_data_d01_m10,而旧数据是preprocessed_data_d01），用脚本 tools/analyze_hdf5_dataset.py分析数据，看相邻帧的差异是否增大
 
 
 ### Train
 
 - quick test 
   python amplify/train_motion_tokenizer.py \
-  root_dir=/home/jay/action_ws/data/preprocessed_data_d01 \
+  root_dir=/home/johnny/action_ws/data/preprocessed_data_d01 \
   cond_cameraviews=[default] \
   keys_to_load=[tracks,images] \
   true_horizon=16 track_pred_horizon=16 \
@@ -49,28 +48,18 @@
   resume=false run_name=new_quick_train_1022_d01_bs8 \
   use_wandb=true lr_schedule=null
 
-- complete test
-  python amplify/train_motion_tokenizer.py \
-  root_dir=/home/jay/action_ws/data/preprocessed_data_d01 \
-  cond_cameraviews=[default] \
-  keys_to_load=[tracks,images] \
-  true_horizon=16 track_pred_horizon=16 \
-  batch_size=16 gpu_max_bs=16 num_epochs=30 \
-  quick=false num_workers=4 log_interval=16 \
-  resume=false run_name=new_complete_train_1022_d01_bs8 \
-  use_wandb=true lr_schedule=null
 
-- codebook collapse test (我希望用到少量部分数据，而不是全部数据)
+- complete train
   python amplify/train_motion_tokenizer.py \
-    root_dir=/home/jay/action_ws/data/preprocessed_data_d01 \
-    train_datasets=[custom_segments:traj0.1] \
-    val_datasets=[custom_segments:traj0.05] \
+    root_dir=/media/johnny/48FF-AA60/preprocessed_data_d01_m10 \
+    train_datasets=[custom_segments:traj0.8] \
+    val_datasets=[custom_segments:traj0.2] \
     cond_cameraviews=[default] \
     keys_to_load=[tracks,images] \
     true_horizon=16 track_pred_horizon=16 \
-    batch_size=8 gpu_max_bs=8 num_epochs=2 \
-    quick=false num_workers=4 log_interval=16 \
-    resume=false run_name=codebook_collapse_regularization_focal_test_d01 \
+    batch_size=8 gpu_max_bs=8 num_epochs=50 \
+    quick=false num_workers=4 log_interval=8 \
+    resume=false run_name=codebook_collapse_epochs10_complete500_test_d01_m10 \
     use_wandb=true lr_schedule=null
 
 #### CoTracker可视化
@@ -78,7 +67,7 @@
 - 对一个动作视频，分T=16滑动窗口，进行CoTracker跟踪（每窗口重采样） —— 更符合当前方法论 （prefered）
 
   python -m video_action_segmenter.window_track_and_save \
-    --output-dir /home/jay/action_ws/video_action_segmenter/inference_outputs/windows \
+    --output-dir /home/johnny/action_ws/video_action_segmenter/inference_outputs/windows \
     --target-fps 20 \
     --resize-shorter 480 \
     --grid-size 20 \
@@ -105,7 +94,7 @@
   - mode: "report"                # fixed | report；report 模式会从报告JSON读取阈值
   - report_path: "./video_action_segmenter/energy_sweep_report/best_threshold_quantized_token_diff.json"
 
-- 如后续更换设备或场景，建议抽取少量样本再跑一次 compute_best_threshold.py 更新报告阈值，而不是在线做自适应
+- 如后续更换设备或场景，需要抽取少量样本再跑一次 compute_best_threshold.py 更新报告阈值，而不是在线做自适应
 
 - Compute best threshold (using smooth参数)
   conda run -n laps python -m video_action_segmenter.compute_best_threshold \
@@ -114,3 +103,14 @@
     --label-threshold auto \
     --smooth --smooth-method ema --smooth-alpha 0.7 --smooth-window 3 \
     --output-json video_action_segmenter/energy_sweep_report/best_threshold_quantized_token_diff_smoothed.json
+
+
+
+wget -O /home/johnny/.cache/torch/hub/checkpoints/cotracker2.pth \
+"https://huggingface.co/facebook/cotracker/resolve/main/cotracker2.pth"
+
+wget -O /home/johnny/.cache/torch/hub/checkpoints/scaled_online.pth \
+"https://huggingface.co/facebook/cotracker3/resolve/main/scaled_online.pth"
+
+export http_proxy=http://127.0.0.1:7890
+export https_proxy=http://127.0.0.1:7890
