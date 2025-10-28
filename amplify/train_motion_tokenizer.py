@@ -366,12 +366,20 @@ def main(cfg):
         train_global_iter = checkpoint_info['train_global_iter']
         val_global_iter = checkpoint_info['val_global_iter']
         wandb_run_id = checkpoint_info['wandb_run_id']
+        # Try to load best_val_loss from best.pt if it exists
+        best_path = os.path.join(checkpoint_dir, "best.pt")
+        if os.path.exists(best_path):
+            best_checkpoint = torch.load(best_path)
+            best_val_loss = best_checkpoint.get('val_loss', float('inf'))
+        else:
+            best_val_loss = float('inf')
     else:
         start_epoch = 1
         end_epoch = cfg.num_epochs + 1
         train_global_iter = 0
         val_global_iter = 0
         wandb_run_id = None
+        best_val_loss = float('inf')
 
     # Logging
     logger = Logger(train_log_interval=cfg.log_interval, val_log_interval=cfg.log_interval)
@@ -419,6 +427,13 @@ def main(cfg):
         # Save checkpoint
         latest_path = os.path.join(checkpoint_dir, "latest.pt")
         save_checkpoint(latest_path, epoch, cfg, model, optimizer, scaler, train_loss=train_loss, val_loss=val_loss, train_global_iter=train_global_iter, val_global_iter=val_global_iter, scheduler=scheduler)
+
+        # Save best checkpoint
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_path = os.path.join(checkpoint_dir, "best.pt")
+            save_checkpoint(best_path, epoch, cfg, model, optimizer, scaler, train_loss=train_loss, val_loss=val_loss, train_global_iter=train_global_iter, val_global_iter=val_global_iter, scheduler=scheduler)
+            print(f'New best model saved with val_loss: {best_val_loss:.6f}')
 
         if epoch % cfg.save_interval == 0 and epoch > 0:
             checkpoint_path = os.path.join(checkpoint_dir, f"{epoch}.pt")

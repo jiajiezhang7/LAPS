@@ -100,7 +100,7 @@ loss:
   focal_alpha: 0.5
   # radial class weighting to counter center dominance
   class_weight_mode: radial   # none | radial
-  class_weight_strength: 2.0  # larger -> stronger upweighting of outer bins
+  class_weight_strength: 4.0  # larger -> stronger upweighting of outer bins
   class_weight_power: 2.0     # polynomial power for radial ramp
 
 per_view: false # whether we have a separate token for each view

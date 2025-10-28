@@ -2,7 +2,7 @@
 # 将 25fps 视频流按时间重采样到 20fps，维护 T=16 环形缓冲；stride=4 触发一次窗口
 
 # 模型权重路径 (新的 amplify 框架)
-checkpoint_path: "/home/johnny/action_ws/checkpoints/motion_tokenizer/codebook_collapse_epochs30_regularization_focal_test_d01_m10/latest.pt"
+checkpoint_path: "/home/johnny/action_ws/checkpoints/motion_tokenizer/epochs5_complete500_d01_m10/best.pt"
 # 解码器窗口大小（用于速度归一化）
 decoder_window_size: 480  # 与训练时的 img_shape 短边一致
 
@@ -12,11 +12,11 @@ amp: true         # 启用 AMP 以提升推理速度（仅 CUDA 有效）
 
 auth: {}
 
-visualize: true
+visualize: false
 
 # 输入源配置
 input:
-  type: "file"   # camera | file | rtsp | folder
+  type: "folder"   # camera | file | rtsp | folder
   # camera_index: 0   # 当 type=camera 时有效
   path: "/media/johnny/48FF-AA60/raw_videos/raw_videos_d01_910_filterstatic/D01_20250810023400.mp4"   # 当 type=file 时有效；若设置为目录且 type=file，会自动切换为 folder 模式
   # url: "rtsp://user:pass@ip:port/stream"   # 当 type=rtsp 时有效
@@ -27,8 +27,8 @@ input:
   eof_timeout_seconds: 1.0  # 文件输入在连续无新帧超过该秒数时，判定为 EOF 并优雅退出当前视频
   batch:
     enable_parallel: true           # 是否在目录批处理模式下启用多 GPU 并行
-    gpu_ids: [0, 1]                 # 可用的物理 GPU 编号列表（例如两块 48GB GPU）
-    max_procs_per_gpu: 3            # 每块 GPU 同时运行的子进程数量
+    gpu_ids: [0]                 # 可用的物理 GPU 编号列表（例如两块 48GB GPU）
+    max_procs_per_gpu: 2            # 每块 GPU 同时运行的子进程数量
     poll_interval_seconds: 0.2      # 轮询子进程完成状态的时间间隔（秒）
 
 # 采样与窗口
@@ -43,14 +43,14 @@ debug_fsq: false
 
 # 静止窗口过滤（基于 CoTracker 速度阈值），用于在进入 Motion Tokenizer 前丢弃“全静止”窗口以节省计算
 motion_gate:
-  enable: false           # 启用静止窗口过滤
+  enable: true           # 启用静止窗口过滤
   vel_norm_thr: 0.020    # 速度阈值（在 [-1,1] 归一化空间的 L2 均值阈值）
   min_active_ratio: 0.025 # 活动关键点比例阈值（>thr 的点占比），低于该比例且均值低于阈值则认为“静止”
   debug: false           # 打开后打印被丢弃窗口的统计
 
 # 前置像素差分快速门控（在 CoTracker 跟踪之前，极低开销）
 pre_gate:
-  enable: false              # 启用前置像素差分快速门控
+  enable: true              # 启用前置像素差分快速门控
   resize_shorter: 128       # 先将短边缩放到该尺寸做差分，降低计算量
   diff_method: mad          # 差分方法（当前仅 MAD 均值绝对差）
   pixel_diff_thr: 0.02      # 像素差分阈值（灰度[0,1]）；用于计算活动像素占比
@@ -72,7 +72,7 @@ energy:
   mode: "token_diff_l2_mean"             # l2_mean | token_diff_l2_mean --- best: token_diff_l2_mean
   jsonl_output: true          # 可选：是否另写一份能量 JSONL
   jsonl_path: "./video_action_segmenter/energy_sweep_out/stream_energy_velocity_token_diff_l2_mean.jsonl"
-  visualize: true              # 是否开启实时能量曲线窗口
+  visualize: false              # 是否开启实时能量曲线窗口
   window_title: "Energy Curve"
   viz_window: 400              # 曲线缓存长度（窗口个数）
   plot_width: 720              # 曲线窗口宽度（近似正方形）
@@ -102,7 +102,7 @@ segmentation:
   report_path: "./video_action_segmenter/energy_sweep_report/best_threshold_quantized_token_diff.json"
   report_key: "quantized_token_diff_best.best_f1.thr"  # 可改为 quantized_token_diff_best.best_j.thr
   min_len_windows: 2            # 片段最小连续正窗口数，低于此长度会丢弃
-  output_dir: "/media/johnny/48FF-AA60/online_inference_output/cb2048_stride4"
+  output_dir: "/media/johnny/48FF-AA60/online_inference_output/epochs5_complete500_d01_m10_cb2048_stride4"
   codec: "mp4v"                 # OpenCV fourcc，如 mp4v/avc1/XVID
   ext: ".mp4"                   # 输出文件扩展名
   align: "center"               # start | center | end；center：首个正窗口仅写半窗（后半），减少起点偏移

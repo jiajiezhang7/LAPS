@@ -49,7 +49,7 @@
   use_wandb=true lr_schedule=null
 
 
-- complete train
+- complete train d01
   python amplify/train_motion_tokenizer.py \
     root_dir=/media/johnny/48FF-AA60/preprocessed_data_d01_m10 \
     train_datasets=[custom_segments:traj0.8] \
@@ -57,9 +57,22 @@
     cond_cameraviews=[default] \
     keys_to_load=[tracks,images] \
     true_horizon=16 track_pred_horizon=16 \
-    batch_size=8 gpu_max_bs=8 num_epochs=50 \
+    batch_size=8 gpu_max_bs=8 num_epochs=5 \
     quick=false num_workers=4 log_interval=8 \
-    resume=false run_name=codebook_collapse_epochs10_complete500_test_d01_m10 \
+    resume=false run_name=epochs5_complete500_d01_m10 \
+    use_wandb=true lr_schedule=null
+
+- complete train d02
+  python amplify/train_motion_tokenizer.py \
+    root_dir=/media/johnny/48FF-AA60/preprocessed_data_d02_m10 \
+    train_datasets=[custom_segments:traj0.8] \
+    val_datasets=[custom_segments:traj0.2] \
+    cond_cameraviews=[default] \
+    keys_to_load=[tracks,images] \
+    true_horizon=16 track_pred_horizon=16 \
+    batch_size=8 gpu_max_bs=8 num_epochs=5 \
+    quick=false num_workers=4 log_interval=8 \
+    resume=false run_name=epochs5_complete500_d02_m10 \
     use_wandb=true lr_schedule=null
 
 #### CoTracker可视化
@@ -84,6 +97,11 @@
   ```bash
     python -m video_action_segmenter.stream_inference \
       --params video_action_segmenter/params.yaml
+  ```
+
+    ```bash
+    python -m video_action_segmenter.stream_inference \
+      --params video_action_segmenter/params_d02.yaml
   ```
 
 ##### Action Energy Analysis （运动能量分析，探究指标优劣 - best: quantized + token_diff_l2_mean）

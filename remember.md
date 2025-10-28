@@ -13,3 +13,21 @@
 ## 目前项目的核心瓶颈
 
 - Motion Tokenizer训练时 codebook 坍塌 （已解决坍塌，但是正在提升codebook利用率）
+
+## 几个数据路径
+
+- preprocessed data
+
+    /media/johnny/48FF-AA60/preprocessed_data_d02_m10
+
+    /media/johnny/48FF-AA60/preprocessed_data_d01_m10
+
+- raw videos
+
+    /media/johnny/48FF-AA60/raw_videos/raw_videos_d01_910_filterstatic
+
+    /media/johnny/48FF-AA60/raw_videos/raw_videos_d02_910_filterstatic
+
+- online inference output
+
+    /media/johnny/48FF-AA60/online_inference_output/cb2048_stride4

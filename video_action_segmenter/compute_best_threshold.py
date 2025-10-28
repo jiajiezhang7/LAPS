@@ -5,10 +5,10 @@ velocity/token_diff_l2_mean as the reference for labeling.
 
 Usage (defaults assume files under energy_sweep_out/):
   python -m video_action_segmenter.compute_best_threshold \
-    --quantized-jsonl video_action_segmenter/energy_sweep_out/stream_energy_quantized_token_diff_l2_mean.jsonl \
-    --velocity-jsonl  video_action_segmenter/energy_sweep_out/stream_energy_velocity_token_diff_l2_mean.jsonl \
+    --quantized-jsonl /home/johnny/action_ws/video_action_segmenter/energy_sweep_out/D02_20250811064933/d02_stream_energy_quantized_token_diff_l2_mean.jsonl \
+    --velocity-jsonl  /home/johnny/action_ws/video_action_segmenter/energy_sweep_out/D02_20250811064933/d02_stream_energy_velocity_token_diff_l2_mean.jsonl \
     --label-threshold auto \
-    --output-json video_action_segmenter/energy_sweep_report/best_threshold_quantized_token_diff.json
+    --output-json /home/johnny/action_ws/video_action_segmenter/energy_sweep_report/d02_best_threshold_quantized_token_diff.json
 
 It prints and saves two recommended thresholds:
 - Best Youden's J (TPR - FPR) threshold

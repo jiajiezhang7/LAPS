@@ -1,10 +1,10 @@
 # Real-time streaming params for Motion Tokenizer
 # 将 25fps 视频流按时间重采样到 20fps，维护 T=16 环形缓冲；stride=4 触发一次窗口
 
-# 模型权重与配置
-checkpoint_dir: "/home/johnny/johnny_ws/motion_tokenizer/checkpoints/train_20250917_172407"
-checkpoint_name: "best.pth"
-model_config: "./amplify_motion_tokenizer/configs/tokenizer_config.yaml"
+# 模型权重路径 (新的 amplify 框架)
+checkpoint_path: "/home/johnny/action_ws/checkpoints/motion_tokenizer/epochs5_complete500_d02_m10/best.pt"
+# 解码器窗口大小（用于速度归一化）
+decoder_window_size: 480  # 与训练时的 img_shape 短边一致
 
 # 设备
 device: "auto"   # auto / cuda / cpu
@@ -16,25 +16,26 @@ visualize: false
 
 # 输入源配置
 input:
-  type: "file"   # camera | file | rtsp | folder
+  type: "folder"   # camera | file | rtsp | folder
   # camera_index: 0   # 当 type=camera 时有效
-  path: "/media/johnny/Data/data_motion_tokenizer/raw_videos/raw_videos_d02_910_filterstatic/D02_20250811090632.mp4"   # 当 type=file 时有效；若设置为目录且 type=file，会自动切换为 folder 模式
+  path: "/media/johnny/48FF-AA60/raw_videos/raw_videos_d02_910_filterstatic/D02_20250811090632.mp4"   # 当 type=file 时有效；若设置为目录且 type=file，会自动切换为 folder 模式
   # url: "rtsp://user:pass@ip:port/stream"   # 当 type=rtsp 时有效
   # 目录批处理（type=folder 时使用；或当 path 指向目录时也会使用）
-  dir: "/media/johnny/Data/data_motion_tokenizer/raw_videos/raw_videos_d02_910_filterstatic"  # 批处理目录
+  dir: "/media/johnny/48FF-AA60/raw_videos/raw_videos_d02_910_filterstatic"  # 批处理目录
   video_exts: [".mp4", ".mov", ".avi", ".mkv"]  # 支持的视频后缀（小写）
   recursive: true  # 是否递归子目录
   eof_timeout_seconds: 1.0  # 文件输入在连续无新帧超过该秒数时，判定为 EOF 并优雅退出当前视频
   batch:
     enable_parallel: true           # 是否在目录批处理模式下启用多 GPU 并行
-    gpu_ids: [0, 1]                 # 可用的物理 GPU 编号列表（例如两块 48GB GPU）
-    max_procs_per_gpu: 3            # 每块 GPU 同时运行的子进程数量
+    gpu_ids: [0]                 # 可用的物理 GPU 编号列表（例如两块 48GB GPU）
+    max_procs_per_gpu: 2            # 每块 GPU 同时运行的子进程数量
     poll_interval_seconds: 0.2      # 轮询子进程完成状态的时间间隔（秒）
 
 # 采样与窗口
 # 记录数据： stride=4, resize_shorter=480, T=16 处理一个窗口需要0.35s
+# 注意：T 会从 checkpoint 的 track_pred_horizon 自动推断
 
-target_fps: 20
+target_fps: 10        # 与训练数据的 target_fps 一致
 resize_shorter: 320   # 可改为 320 以降低跟踪耗时
 stride: 4             # 固定 4（确保与实时预算一致）
 
@@ -58,27 +59,26 @@ pre_gate:
   debug: false              # 打印被丢弃窗口的 MAD/ratio 统计
 
 # 可选：流式输出 codes 到 JSONL（仅codes，便于联调）
-jsonl_output: false
+jsonl_output: true
 jsonl_path: "./video_action_segmenter/inference_outputs/stream_codes.jsonl"
 
 # UI 刷新帧率（用于显示窗口），默认等于 target_fps；如显示卡顿可降低
-display_fps: 20
+display_fps: 10
 
 # 能量曲线配置（用于实时观测动作能量）
 energy:
   enable: true                 # 是否计算窗口能量 E_t
   source: "quantized"          # prequant | quantized | velocity --- best: quantized
   mode: "token_diff_l2_mean"             # l2_mean | token_diff_l2_mean --- best: token_diff_l2_mean
-  # TODO 搞清楚以下的josnl_output 和josnl_path在脚本中是否还真的被使用 —— 因为现在已经直接输出到对应的视频文件夹下了
   jsonl_output: true          # 可选：是否另写一份能量 JSONL
   jsonl_path: "./video_action_segmenter/energy_sweep_out/d02_stream_energy_quantized_token_diff_l2_mean.jsonl"
-  visualize: true              # 是否开启实时能量曲线窗口
+  visualize: false              # 是否开启实时能量曲线窗口
   window_title: "Energy Curve"
   viz_window: 400              # 曲线缓存长度（窗口个数）
   plot_width: 720              # 曲线窗口宽度（近似正方形）
   plot_height: 520             # 曲线窗口高度（近似正方形）
-  y_min: 11.3                  # 纵轴下限（根据你的观测可调整；设 null 则自适应）
-  y_max: 15.5                  # 纵轴上限（根据你的观测可调整；设 null 则自适应）
+  y_min: null                  # 纵轴下限（根据你的观测可调整；设 null 则自适应）
+  y_max: null                  # 纵轴上限（根据你的观测可调整；设 null 则自适应）
   plot_color: [0, 255, 0]      # BGR 颜色
 
   viz_style: enhanced
@@ -98,11 +98,11 @@ energy:
 segmentation:
   enable: true                  # 是否启用阈值分割与片段保存
   mode: "report"                # fixed | report；report 模式会从报告JSON读取阈值
-  threshold: 10.625             # 当 mode=fixed 时使用；推荐 balanced thr=10.625，高召回 thr≈9.80
-  report_path: "./video_action_segmenter/energy_sweep_report/best_threshold_quantized_token_diff.json"
+  threshold: 1.9326171875       # 当 mode=fixed 时使用；推荐 balanced thr=10.625，高召回 thr≈9.80
+  report_path: "./video_action_segmenter/energy_sweep_report/d02_best_threshold_quantized_token_diff.json"
   report_key: "quantized_token_diff_best.best_f1.thr"  # 可改为 quantized_token_diff_best.best_j.thr
   min_len_windows: 2            # 片段最小连续正窗口数，低于此长度会丢弃
-  output_dir: "/media/johnny/Data/data_motion_tokenizer/d02_online_inference_results_codebook2048_stride4"
+  output_dir: "/media/johnny/48FF-AA60/online_inference_output/epochs5_complete500_d02_m10_cb2048_stride4"
   codec: "mp4v"                 # OpenCV fourcc，如 mp4v/avc1/XVID
   ext: ".mp4"                   # 输出文件扩展名
   align: "center"               # start | center | end；center：首个正窗口仅写半窗（后半），减少起点偏移
@@ -123,4 +123,4 @@ export:
   prequant: false              # 是否导出未量化 latent (to_quantize)
   prequant_dir: "./video_action_segmenter/inference_outputs/stream_prequant"
 
-max_windows: 0
+max_windows: 5000
