@@ -361,8 +361,9 @@ def main():
 
     # Export
     out_base = Path(args.out_dir) if args.out_dir else Path(cfg['export']['out_dir'])
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    out_dir = (out_base / timestamp).resolve()
+    # Use json_root folder name as subdirectory name
+    json_root_name = json_root.name
+    out_dir = (out_base / json_root_name).resolve()
     ensure_dir(out_dir)
 
     # Save artifacts

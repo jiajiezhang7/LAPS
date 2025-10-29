@@ -1,0 +1,28 @@
+seed: 0  # 全局随机种子：确保 PCA/UMAP/GMM 初始化可复现
+ 
+preprocessing:
+  lstm_feature:
+    pca:
+      max_dims: 0  # 0=禁用；常见 32/64。高维→建议启用以稳态与加速
+      explained_variance_threshold: 0.99  # 0.95–0.99。越高→保留信息多但维度↑
+      min_dims: 8  # 保底维度，防止过度压缩
+    l2_normalize: true  # 单位范数：有助于以欧氏距离近似余弦、提升稳定性
+ 
+clustering:
+  bayes_gmm:
+    n_components: 12  # 截断上限K：DP会自动稀疏未用成分；设为预期簇数的~2–3倍
+    covariance_type: full  # full/diag/tied/spherical；full最灵活但慢，diag更稳更快
+    weight_concentration_prior_type: dirichlet_process  # DP促稀疏、自动裁剪有效簇数
+    init_params: kmeans  # kmeans 更稳；random 更快但可能不稳定
+    max_iter: 1000  # EM 最大迭代步；若未收敛可↑，或调低以加速实验
+ 
+visualization:
+  umap:
+    enabled: true  # 仅可视化诊断，不影响训练
+    n_neighbors: 15  # 10–50。大→更全局，小→更局部
+    min_dist: 0.1  # 0.0–0.5。小→簇更紧凑，大→分布更均匀
+    lstm_metric: 'cosine'  # 与 L2 归一化向量常搭配
+    plot:
+      figsize: [7, 6]
+      marker_size: 10
+      dpi: 200

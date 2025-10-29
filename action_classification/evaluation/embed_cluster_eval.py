@@ -86,12 +86,83 @@ def _umap_scatter_unsup(
     return res
 
 
-def load_embed_dir(embed_dir: Path) -> np.ndarray:
+def load_embed_dir(embed_dir: Path) -> Tuple[np.ndarray, np.ndarray, List[str]]:
+    """Load embeddings with labels from embed.npy, labels.npy, label_names.txt (labeled evaluation).
+    
+    If labels.npy is not available, extracts labels from paths.txt (top-level folder name).
+    """
+    X = np.load(embed_dir / 'embed.npy')
+    if not isinstance(X, np.ndarray) or X.ndim != 2:
+        raise RuntimeError(f'embed.npy must be a 2D array, got shape={None if not isinstance(X, np.ndarray) else X.shape}')
+    
+    # Try to load labels.npy first
+    labels_path = embed_dir / 'labels.npy'
+    if labels_path.exists():
+        y = np.load(labels_path)
+        if not isinstance(y, np.ndarray) or y.ndim != 1:
+            raise RuntimeError(f'labels.npy must be a 1D array, got shape={None if not isinstance(y, np.ndarray) else y.shape}')
+    else:
+        # Fallback: extract labels from paths.txt (top-level folder name)
+        paths_path = embed_dir / 'paths.txt'
+        if paths_path.exists():
+            paths = [line.strip() for line in paths_path.read_text(encoding='utf-8').splitlines() if line.strip()]
+            # Extract top-level folder name from each path
+            label_strs = [str(p).split('/')[0] for p in paths]
+            unique_labels = sorted(set(label_strs))
+            label_to_idx = {label: idx for idx, label in enumerate(unique_labels)}
+            y = np.asarray([label_to_idx[label_str] for label_str in label_strs], dtype=np.int64)
+        else:
+            raise RuntimeError(f'Neither labels.npy nor paths.txt found in {embed_dir}')
+    
+    label_names_path = embed_dir / 'label_names.txt'
+    if label_names_path.exists():
+        label_names = [line.strip() for line in label_names_path.read_text(encoding='utf-8').splitlines() if line.strip()]
+    else:
+        label_names = [str(i) for i in range(int(np.max(y)) + 1)]
+    
+    return X, y, label_names
+
+
+def load_embed_dir_unlabeled(embed_dir: Path) -> np.ndarray:
     """Load embeddings only from embed.npy (unlabeled evaluation)."""
     X = np.load(embed_dir / 'embed.npy')
     if not isinstance(X, np.ndarray) or X.ndim != 2:
         raise RuntimeError(f'embed.npy must be a 2D array, got shape={None if not isinstance(X, np.ndarray) else X.shape}')
     return X
+
+
+def _merge_labels(y_true: np.ndarray, label_names: List[str], merge_map: Dict[str, str]) -> Tuple[np.ndarray, List[str]]:
+    """Merge label classes according to merge_map.
+    
+    Args:
+        y_true: Label indices array
+        label_names: List of label names
+        merge_map: Dict mapping old label names to new label names
+    
+    Returns:
+        Tuple of (merged_y_true, merged_label_names)
+    """
+    if not merge_map:
+        return y_true, label_names
+    
+    # Build reverse mapping: old_label_idx -> new_label_name
+    idx_to_old_name = {i: name for i, name in enumerate(label_names)}
+    old_name_to_new_name = merge_map
+    
+    # Build new label space
+    new_label_names = []
+    old_idx_to_new_idx = {}
+    
+    for old_idx, old_name in idx_to_old_name.items():
+        new_name = old_name_to_new_name.get(old_name, old_name)
+        if new_name not in new_label_names:
+            new_label_names.append(new_name)
+        old_idx_to_new_idx[old_idx] = new_label_names.index(new_name)
+    
+    # Remap y_true
+    y_merged = np.asarray([old_idx_to_new_idx[int(idx)] for idx in y_true], dtype=np.int64)
+    
+    return y_merged, new_label_names
 
 
 def _k_grid_from_config(config: Dict[str, Any]) -> List[int]:
@@ -272,7 +343,7 @@ def evaluate_hdbscan_grid(
 
 
 def run_embed_eval(embed_dir: Path, config: Dict[str, Any], out_dir: Optional[Path] = None) -> Dict[str, Any]:
-    X = load_embed_dir(embed_dir)
+    X = load_embed_dir_unlabeled(embed_dir)
     seed = int(config.get('seed', 0))
     k_grid = _k_grid_from_config(config)
     kmeans_repeats = int(config.get('kmeans_repeats', 1))

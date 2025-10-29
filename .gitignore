@@ -26,3 +26,4 @@ amplify/outputs/
 outputs/
 wandb/
 data/
+action_classification/results/

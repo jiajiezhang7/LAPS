@@ -127,8 +127,9 @@ def main():
 
     # Export embeddings
     out_base = Path(args.out_dir).resolve()
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    out_dir = (out_base / timestamp).resolve()
+    # Use json_root folder name as subdirectory name
+    json_root_name = json_root.name
+    out_dir = (out_base / json_root_name).resolve()
     ensure_dir(out_dir)
 
     X, paths = export_embeddings(model, ds_all, device=device, l2_normalize=args.l2_normalize)

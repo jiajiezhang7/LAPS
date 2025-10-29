@@ -16,9 +16,10 @@ except Exception as e:  # pragma: no cover
 
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import normalize
+from sklearn.metrics import silhouette_score, calinski_harabasz_score, davies_bouldin_score
 
 # Reuse loader from eval script
-from action_classification.evaluation.embed_cluster_eval import load_embed_dir, _merge_labels
+from action_classification.evaluation.embed_cluster_eval import load_embed_dir_unlabeled
 
 
 def ensure_dir(p: Path) -> None:
@@ -27,9 +28,7 @@ def ensure_dir(p: Path) -> None:
 
 def run_umap_scatter(
     X: np.ndarray,
-    y_true: np.ndarray,
-    y_pred_aligned: np.ndarray,
-    label_names: List[str],
+    y_pred: np.ndarray,
     out_dir: Path,
     config: Dict[str, Any],
     X_all: Optional[np.ndarray] = None,
@@ -59,63 +58,47 @@ def run_umap_scatter(
         emb = reducer.fit_transform(X_src)
 
         out_dir.mkdir(parents=True, exist_ok=True)
-        # Consistent color mapping across plots
-        hue_order = sorted(label_names)
-        palette = sns.color_palette('tab10', n_colors=len(hue_order))
-        color_map = dict(zip(hue_order, palette))
         plot_size = vis_cfg.get('plot', {}).get('marker_size', 10)
 
+        # Color mapping for cluster IDs
+        unique_clusters = sorted(np.unique(y_pred).tolist())
+        palette = sns.color_palette('tab20', n_colors=max(1, len(unique_clusters)))
+        color_map = {cid: palette[i % len(palette)] for i, cid in enumerate(unique_clusters)}
+        
         # Prepare indices
         if use_all:
             assigned_idx = np.where(~noise_mask)[0]
             emb_assigned = emb[assigned_idx]
             emb_noise = emb[noise_mask]
+            y_pred_assigned = y_pred[~noise_mask]
             noise_style = vis_cfg.get('noise', {})
             noise_color = noise_style.get('color', '#b0b0b0')
             noise_alpha = float(noise_style.get('alpha', 0.4))
             noise_size = int(noise_style.get('marker_size', max(1, int(0.8 * plot_size))))
         else:
             emb_assigned = emb
+            y_pred_assigned = y_pred
 
-        # True labels plot
+        # Cluster visualization plot
+        colors = [color_map[int(c)] for c in y_pred_assigned]
         plt.figure(figsize=tuple(vis_cfg.get('plot', {}).get('figsize', (7, 6))))
         if use_all:
             # draw noise first (background)
             if emb_noise.shape[0] > 0:
-                plt.scatter(emb_noise[:, 0], emb_noise[:, 1], c=noise_color, s=noise_size, alpha=noise_alpha, linewidths=0.0)
-        sns.scatterplot(
-            x=emb_assigned[:, 0],
-            y=emb_assigned[:, 1],
-            hue=[label_names[i] for i in y_true],
-            palette=color_map,
-            hue_order=hue_order,
-            s=plot_size,
-            linewidth=0.0
-        )
-        plt.title('UMAP (lstm) - True Labels')
-        plt.legend(markerscale=2, bbox_to_anchor=(1.05, 1), loc='upper left')
-        true_path = out_dir / 'umap_true_lstm.png'
-        plt.tight_layout()
-        plt.savefig(true_path, dpi=vis_cfg.get('plot', {}).get('dpi', 200))
-        plt.close()
-
-        # Predicted labels plot
-        plt.figure(figsize=tuple(vis_cfg.get('plot', {}).get('figsize', (7, 6))))
-        if use_all:
-            if emb_noise.shape[0] > 0:
-                plt.scatter(emb_noise[:, 0], emb_noise[:, 1], c=noise_color, s=noise_size, alpha=noise_alpha, linewidths=0.0)
-        sns.scatterplot(
-            x=emb_assigned[:, 0],
-            y=emb_assigned[:, 1],
-            hue=[label_names[i] if 0 <= i < len(label_names) else 'UNK' for i in y_pred_aligned],
-            palette=color_map,
-            hue_order=hue_order,
-            s=plot_size,
-            linewidth=0.0
-        )
-        plt.title('UMAP (lstm) - Predicted (Aligned)')
-        plt.legend(markerscale=2, bbox_to_anchor=(1.05, 1), loc='upper left')
-        pred_path = out_dir / 'umap_pred_lstm.png'
+                plt.scatter(emb_noise[:, 0], emb_noise[:, 1], c=noise_color, s=noise_size, alpha=noise_alpha, linewidths=0.0, label='Noise')
+        plt.scatter(emb_assigned[:, 0], emb_assigned[:, 1], c=colors, s=plot_size, linewidths=0.0)
+        
+        # Build legend
+        from matplotlib.lines import Line2D
+        legend_elems = [Line2D([0], [0], marker='o', color='w', label=f'Cluster {cid}', 
+                              markerfacecolor=color_map[cid], markersize=6)
+                       for cid in unique_clusters if cid != -1]
+        if use_all and emb_noise.shape[0] > 0:
+            legend_elems.append(Line2D([0], [0], marker='o', color='w', label='Noise', 
+                                      markerfacecolor=noise_color, markersize=6, alpha=noise_alpha))
+        plt.legend(handles=legend_elems, title='Cluster ID', markerscale=2, bbox_to_anchor=(1.05, 1), loc='upper left')
+        plt.title('UMAP - Predicted Clusters (Unsupervised)')
+        pred_path = out_dir / 'umap_clusters_lstm.png'
         plt.tight_layout()
         plt.savefig(pred_path, dpi=vis_cfg.get('plot', {}).get('dpi', 200))
         plt.close()
@@ -124,8 +107,8 @@ def run_umap_scatter(
             'metric': metric,
             'neighbors': vis_cfg.get('n_neighbors', 15),
             'min_dist': vis_cfg.get('min_dist', 0.1),
-            'embeddings_path_true': str(true_path),
-            'embeddings_path_pred': str(pred_path),
+            'embeddings_path': str(pred_path),
+            'unique_cluster_ids': unique_clusters,
         }
     except Exception as e:
         res['umap_error'] = str(e)
@@ -133,11 +116,11 @@ def run_umap_scatter(
 
 
 def run_umap_scatter_clusters(X: np.ndarray, y_clusters: np.ndarray, out_dir: Path, config: Dict[str, Any]) -> Dict[str, Any]:
-    """UMAP 可视化（未对齐）：按簇ID着色。
-
-    说明：
-    - 仅使用簇ID（包含 -1 表示噪声时可自行选择是否传入）。
-    - 与 run_umap_scatter 保持相同的 UMAP 参数，便于对比。
+    """UMAP visualization: color by raw cluster IDs.
+    
+    Note:
+    - Uses only cluster IDs (including -1 for noise if present).
+    - Uses same UMAP parameters as run_umap_scatter for consistency.
     """
     res: Dict[str, Any] = {}
     try:
@@ -160,74 +143,54 @@ def run_umap_scatter_clusters(X: np.ndarray, y_clusters: np.ndarray, out_dir: Pa
 
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        # 颜色映射：按簇ID（包含-1时也一并显示）
+        # Color mapping by cluster ID (including -1 for noise if present)
         unique_clusters = sorted(np.unique(y_clusters).tolist())
-        # 为了可靠可读，最多取到 unique 数量的调色板颜色
         palette = sns.color_palette('tab20', n_colors=max(1, len(unique_clusters)))
         color_map = {cid: palette[i % len(palette)] for i, cid in enumerate(unique_clusters)}
         colors = [color_map[int(c)] for c in y_clusters]
 
         plt.figure(figsize=tuple(vis_cfg.get('plot', {}).get('figsize', (7, 6))))
         plt.scatter(emb[:, 0], emb[:, 1], c=colors, s=vis_cfg.get('plot', {}).get('marker_size', 10), linewidths=0.0)
-        # 构造图例
+        # Build legend
         from matplotlib.lines import Line2D
-        legend_elems = [Line2D([0], [0], marker='o', color='w', label=str(cid), markerfacecolor=color_map[cid], markersize=6)
+        legend_elems = [Line2D([0], [0], marker='o', color='w', 
+                              label='Noise' if cid == -1 else f'Cluster {cid}', 
+                              markerfacecolor=color_map[cid], markersize=6)
                         for cid in unique_clusters]
         plt.legend(handles=legend_elems, title='Cluster ID', markerscale=2, bbox_to_anchor=(1.05, 1), loc='upper left')
-        plt.title('UMAP (lstm) - Predicted Clusters (raw IDs)')
-        pred_clusters_path = out_dir / 'umap_pred_clusters_lstm.png'
+        plt.title('UMAP - All Clusters (Raw IDs)')
+        pred_clusters_path = out_dir / 'umap_all_clusters_lstm.png'
         plt.tight_layout()
         plt.savefig(pred_clusters_path, dpi=vis_cfg.get('plot', {}).get('dpi', 200))
         plt.close()
 
-        res['umap_clusters'] = {
+        res['umap_all_clusters'] = {
             'metric': metric,
             'neighbors': vis_cfg.get('n_neighbors', 15),
             'min_dist': vis_cfg.get('min_dist', 0.1),
-            'embeddings_path_pred_clusters': str(pred_clusters_path),
+            'embeddings_path': str(pred_clusters_path),
             'unique_cluster_ids': unique_clusters,
         }
     except Exception as e:
-        res['umap_clusters_error'] = str(e)
+        res['umap_all_clusters_error'] = str(e)
     return res
-
-
-def hungarian_alignment(cm: np.ndarray) -> Tuple[Dict[int, int], float]:
-    from scipy.optimize import linear_sum_assignment
-    r_ind, c_ind = linear_sum_assignment(-cm)
-    mapping = {int(c): int(r) for r, c in zip(r_ind, c_ind)}
-    acc = cm[r_ind, c_ind].sum() / cm.sum() if cm.sum() > 0 else 0.0
-    return mapping, float(acc)
-
-
-def per_class_precision_recall(cm: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    tp = np.diag(cm).astype(np.float64)
-    pred_pos = cm.sum(axis=0).astype(np.float64)
-    true_pos = cm.sum(axis=1).astype(np.float64)
-    precision = np.divide(tp, pred_pos, out=np.zeros_like(tp), where=pred_pos > 0)
-    recall = np.divide(tp, true_pos, out=np.zeros_like(tp), where=true_pos > 0)
-    return precision, recall
 
 
 def main():
     if hdbscan is None:
         raise ImportError("hdbscan is not installed. Please install hdbscan>=0.8.33.")
 
-    ap = argparse.ArgumentParser(description='Fit HDBSCAN over LSTM embeddings and save model for online inference')
-    ap.add_argument('--embed-dir', type=str, required=True, help='Directory that contains embed.npy, labels.npy, label_names.txt')
-    ap.add_argument('--config', type=str, default='amplify_motion_tokenizer/action_classification/configs/eval_config.yaml', help='Config with clustering/visualization keys')
+    ap = argparse.ArgumentParser(description='Fit HDBSCAN over LSTM embeddings (fully unsupervised) and save model for online inference')
+    ap.add_argument('--embed-dir', type=str, required=True, help='Directory that contains embed.npy (unlabeled)')
+    ap.add_argument('--config', type=str, default='action_classification/configs/hdbscan_config.yaml', help='Config with clustering/visualization keys (hdbscan_config.yaml or eval_config.yaml)')
     ap.add_argument('--out-dir', type=str, default=None, help='Base directory to save model and reports')
     args = ap.parse_args()
 
     with open(args.config, 'r') as f:
         config = yaml.safe_load(f)
 
-    X, y_true, label_names = load_embed_dir(Path(args.embed_dir).resolve())
-    # Optional label merging for reporting (e.g., merge nok_* into nok)
-    label_proc_cfg = config.get('label_processing', {}) if isinstance(config, dict) else {}
-    merge_map = label_proc_cfg.get('merge_map', {}) or {}
-    if len(merge_map) > 0:
-        y_true, label_names = _merge_labels(y_true, label_names, merge_map)
+    X = load_embed_dir_unlabeled(Path(args.embed_dir).resolve())
+    print(f"[Info] Loaded {X.shape[0]} samples with embedding dimension {X.shape[1]}")
 
     # Optional preprocessing for lstm features
     pre_cfg = config.get('preprocessing', {}).get('lstm_feature', {})
@@ -302,89 +265,77 @@ def main():
             'cluster_selection_epsilon': float(cluster_selection_epsilon),
             'cluster_selection_method': cluster_selection_method,
         },
-        'label_names': label_names,
     }
     with open(out_dir / 'cluster_meta.json', 'w', encoding='utf-8') as f:
         json.dump(meta, f, ensure_ascii=False, indent=2)
 
-    # Train-set assignment analysis (exclude noise)
+    # Unsupervised evaluation
     y_pred = model.labels_.astype(int)
     mask = (y_pred != -1)
-    C_true = int(np.max(y_true)) + 1
     pred_ids = np.unique(y_pred[mask]) if np.any(mask) else np.array([], dtype=int)
-
+    n_clusters = len(pred_ids)
+    noise_rate = float(1.0 - (float(mask.sum()) / max(1, X.shape[0])))
+    
+    # Compute cluster sizes
+    cluster_sizes = {}
+    for cid in np.unique(y_pred):
+        cluster_sizes[str(int(cid))] = int((y_pred == cid).sum())
+    
     results: Dict[str, Any] = {
         'method': 'hdbscan',
         'num_samples': int(X.shape[0]),
-        'noise_rate': float(1.0 - (float(mask.sum()) / max(1, X.shape[0]))),
-        'num_pred_clusters': int(pred_ids.size),
+        'noise_rate': noise_rate,
+        'num_pred_clusters': int(n_clusters),
+        'cluster_sizes': cluster_sizes,
     }
 
-    if pred_ids.size > 0:
-        # Rectangular confusion (true x pred)
-        pred_id_to_col = {int(cid): i for i, cid in enumerate(pred_ids.tolist())}
-        from sklearn.metrics import confusion_matrix, normalized_mutual_info_score, adjusted_rand_score, f1_score
-        cm_rect = np.zeros((C_true, pred_ids.size), dtype=np.int64)
-        for t, p in zip(y_true[mask].tolist(), y_pred[mask].tolist()):
-            cm_rect[int(t), int(pred_id_to_col[int(p)])] += 1
-        mapping_rect, acc = hungarian_alignment(cm_rect)
-        # Complete mapping for columns not covered by Hungarian (when K_pred > C_true)
-        mapping_full = dict(mapping_rect)
-        K_pred = cm_rect.shape[1]
-        for col in range(K_pred):
-            if col not in mapping_full:
-                col_sum = cm_rect[:, col].sum()
-                fallback_row = int(np.argmax(cm_rect[:, col])) if col_sum > 0 else 0
-                mapping_full[col] = fallback_row
+    # Compute unsupervised metrics on non-noise points (only if we have multiple clusters)
+    metrics: Dict[str, Any] = {}
+    if n_clusters >= 2 and mask.sum() >= 2:
+        try:
+            sil = float(silhouette_score(X_proc[mask], y_pred[mask], metric='euclidean'))
+            metrics['silhouette'] = sil
+        except Exception as e:
+            metrics['silhouette_error'] = str(e)
+        
+        try:
+            ch = float(calinski_harabasz_score(X_proc[mask], y_pred[mask]))
+            metrics['calinski_harabasz'] = ch
+        except Exception as e:
+            metrics['calinski_harabasz_error'] = str(e)
+        
+        try:
+            db = float(davies_bouldin_score(X_proc[mask], y_pred[mask]))
+            metrics['davies_bouldin'] = db
+        except Exception as e:
+            metrics['davies_bouldin_error'] = str(e)
+    
+    results['metrics'] = metrics
 
-        # Compute aligned metrics on assigned subset using full mapping
-        y_pred_aligned_masked = np.asarray([mapping_full[int(pred_id_to_col[int(p)])] for p in y_pred[mask]], dtype=np.int64)
-        nmi = float(normalized_mutual_info_score(y_true[mask], y_pred[mask]))
-        ari = float(adjusted_rand_score(y_true[mask], y_pred[mask]))
-        cm_aligned = confusion_matrix(y_true[mask], y_pred_aligned_masked, labels=list(range(C_true)))
-        prec, rec = per_class_precision_recall(cm_aligned)
-        f1_macro = float(f1_score(y_true[mask], y_pred_aligned_masked, average='macro'))
-
-        results.update({
-            'metrics': {
-                'acc': float(acc),
-                'nmi': float(nmi),
-                'ari': float(ari),
-                'f1_macro': float(f1_macro),
-                'precision_per_class': [float(x) for x in prec.tolist()],
-                'recall_per_class': [float(x) for x in rec.tolist()],
-                'label_names': label_names,
-            },
-            'confusion_matrix': cm_aligned.astype(int).tolist(),
-            'mapping_predCluster_to_trueLabel': {str(int(cid)): int(mapping_full[col]) for cid, col in pred_id_to_col.items()},
-        })
-
-        # Optional UMAP on assigned points
-        if config.get('visualization', {}).get('umap', {}).get('enabled', True):
-            vis_dir = out_dir / 'umap'
-            vis_cfg = config.get('visualization', {}).get('umap', {})
-            show_noise = bool(vis_cfg.get('show_noise', False))
-            if show_noise:
-                umap_res = run_umap_scatter(
-                    X_proc[mask],
-                    y_true[mask],
-                    y_pred_aligned_masked,
-                    label_names,
-                    vis_dir,
-                    config,
-                    X_all=X_proc,
-                    noise_mask=(y_pred == -1)
-                )
-                results.update(umap_res)
-                # 未对齐、按簇ID着色的 UMAP（包含噪声 -1）
-                umap_clusters_res = run_umap_scatter_clusters(X_proc, y_pred, vis_dir, config)
-                results.update(umap_clusters_res)
-            else:
-                umap_res = run_umap_scatter(X_proc[mask], y_true[mask], y_pred_aligned_masked, label_names, vis_dir, config)
-                results.update(umap_res)
-                # 未对齐、按簇ID着色的 UMAP（仅对已分配的样本）
-                umap_clusters_res = run_umap_scatter_clusters(X_proc[mask], y_pred[mask], vis_dir, config)
-                results.update(umap_clusters_res)
+    # Optional UMAP visualization
+    if config.get('visualization', {}).get('umap', {}).get('enabled', True):
+        vis_dir = out_dir / 'umap'
+        vis_cfg = config.get('visualization', {}).get('umap', {})
+        show_noise = bool(vis_cfg.get('show_noise', False))
+        if show_noise:
+            umap_res = run_umap_scatter(
+                X_proc,
+                y_pred,
+                vis_dir,
+                config,
+                X_all=X_proc,
+                noise_mask=(y_pred == -1)
+            )
+            results.update(umap_res)
+            # Also create cluster-only visualization
+            umap_clusters_res = run_umap_scatter_clusters(X_proc, y_pred, vis_dir, config)
+            results.update(umap_clusters_res)
+        else:
+            umap_res = run_umap_scatter(X_proc[mask], y_pred[mask], vis_dir, config)
+            results.update(umap_res)
+            # Also create cluster-only visualization
+            umap_clusters_res = run_umap_scatter_clusters(X_proc[mask], y_pred[mask], vis_dir, config)
+            results.update(umap_clusters_res)
 
     # Save aggregate results
     with open(out_dir / 'aggregate_results.json', 'w', encoding='utf-8') as f:
@@ -408,15 +359,14 @@ def main():
     else:
         paths = [str(i) for i in range(X.shape[0])]
 
-    assign_path = out_dir / 'train_assignments.jsonl'
+    assign_path = out_dir / 'cluster_assignments.jsonl'
     with open(assign_path, 'w', encoding='utf-8') as f:
         for i in range(X.shape[0]):
             rec = {
                 'index': int(i),
                 'path': paths[i] if i < len(paths) else str(i),
-                'true_label': int(y_true[i]) if i < y_true.shape[0] else -1,
-                'pred_cluster': int(y_pred[i]),
-                'pred_prob': float(pred_prob[i]),
+                'cluster': int(y_pred[i]),
+                'prob': float(pred_prob[i]),
                 'is_noise': bool(y_pred[i] == -1),
             }
             f.write(json.dumps(rec, ensure_ascii=False) + '\n')
@@ -424,7 +374,10 @@ def main():
     print(f"[Saved] HDBSCAN model: {out_dir / 'model_hdbscan.pkl'}")
     print(f"[Saved] Meta: {out_dir / 'cluster_meta.json'}")
     print(f"[Saved] Aggregate results: {out_dir / 'aggregate_results.json'}")
-    print(f"[Saved] Train assignments: {assign_path}")
+    print(f"[Saved] Cluster assignments: {assign_path}")
+    print(f"\n[Summary] Found {n_clusters} clusters from {X.shape[0]} samples (noise rate: {noise_rate:.2%})")
+    if 'silhouette' in metrics:
+        print(f"  Silhouette score: {metrics['silhouette']:.4f}")
 
 
 if __name__ == '__main__':
