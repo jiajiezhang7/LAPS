@@ -253,6 +253,7 @@ def run_streaming(args):
     seg_report_path = Path(seg_cfg.get("report_path", "./video_action_segmenter/energy_sweep_report/best_threshold_quantized_token_diff.json")).resolve()
     seg_report_key = str(seg_cfg.get("report_key", "quantized_token_diff_best.best_f1.thr"))
     seg_min_len_windows = int(seg_cfg.get("min_len_windows", 2))  # 片段最少包含的正窗口数
+    seg_min_save_windows = max(int(seg_min_len_windows), 3)  # 强制过滤 <=2 窗口的片段
     seg_output_dir = Path(seg_cfg.get("output_dir", "./video_action_segmenter/inference_outputs/segments")).resolve()
     seg_codec = str(seg_cfg.get("codec", "mp4v"))  # OpenCV fourcc，如 mp4v, avc1
     seg_ext = str(seg_cfg.get("ext", ".mp4"))
@@ -648,6 +649,14 @@ def run_streaming(args):
                 # 在 GPU 上的中间张量：显式转移到 CPU，尽快释放显存
                 to_quantize_cpu = to_quantize.detach().cpu() if isinstance(to_quantize, torch.Tensor) else None
                 quantized_cpu = quantized.detach().cpu() if isinstance(quantized, torch.Tensor) else None
+
+                quantized_seq_list = None
+                if seg_enable and seg_export_codes and isinstance(quantized_cpu, torch.Tensor):
+                    try:
+                        q = quantized_cpu.squeeze(0)  # (seq_len, hidden_dim)
+                        quantized_seq_list = q.to(torch.float32).numpy().tolist()
+                    except Exception:
+                        quantized_seq_list = None
                 
                 # 显式删除大中间变量，减少 CUDA caching allocator 的峰值
                 try:
@@ -685,6 +694,7 @@ def run_streaming(args):
                     "D": D_dim,
                     "codes": code_ids_seq_list,
                     "used_digits_merge": used_digits_merge,
+                    "quantized_vectors": quantized_seq_list,
                     "energy": energy_val,
                     "energy_source": energy_source,
                     "energy_mode": energy_mode,
@@ -730,6 +740,7 @@ def run_streaming(args):
     window_frames_store = {}
     # 每窗 codes 与帧范围缓存（用于片段 codes 导出）
     window_codes_store = {}
+    window_quantized_store = {}
     window_frame_range_store = {}
 
     # 分割状态
@@ -936,6 +947,13 @@ def run_streaming(args):
                 except Exception:
                     pass
 
+                try:
+                    qseq = res.get("quantized_vectors", None)
+                    if seg_enable and seg_export_codes and isinstance(qseq, list):
+                        window_quantized_store[int(windows_done)] = qseq
+                except Exception:
+                    pass
+
                 # 可选：写入能量 JSONL（与 codes JSONL 相互独立）——保持写入原始值以与离线分析兼容
                 if energy_jsonl_output and isinstance(energy_val, (float, int)):
                     try:
@@ -1054,27 +1072,37 @@ def run_streaming(args):
                                     seg_writer.release()
                             except Exception:
                                 pass
-                            print(f"[Seg] END (max_duration) win#{int(windows_done)} len_windows={seg_written_windows} path={seg_current_path}")
-                            # 导出片段 codes（整窗拼接，选择与片段重叠比例>=阈值且互不重叠的窗口）
-                            try:
-                                if seg_export_codes and should_save_codes(seg_current_path):
-                                    export_codes_for_segment(
-                                        seg_codes_dir=seg_codes_dir,
-                                        seg_current_path=seg_current_path,
-                                        window_frame_range_store=window_frame_range_store,
-                                        window_codes_store=window_codes_store,
-                                        seg_start_frame=seg_start_frame,
-                                        seg_end_frame=seg_end_frame,
-                                        seg_start_win=seg_start_win,
-                                        T=T,
-                                        stride=stride,
-                                        target_fps=target_fps,
-                                        seg_align=seg_align,
-                                        seg_codes_min_overlap_ratio=seg_codes_min_overlap_ratio,
-                                        allow_overlap=seg_allow_overlap,
-                                    )
-                            except Exception as e:
-                                print(f"[Seg][WARN] export codes failed: {e}")
+                            if seg_written_windows < int(seg_min_save_windows):
+                                if seg_current_path is not None:
+                                    cleanup_segment_and_codes(seg_current_path)
+                                print(
+                                    f"[Seg] DROP (max_duration) win#{int(windows_done)} len_windows={seg_written_windows} path={seg_current_path}"
+                                )
+                            else:
+                                print(
+                                    f"[Seg] END (max_duration) win#{int(windows_done)} len_windows={seg_written_windows} path={seg_current_path}"
+                                )
+                                # 导出片段 codes（整窗拼接，选择与片段重叠比例>=阈值且互不重叠的窗口）
+                                try:
+                                    if seg_export_codes and should_save_codes(seg_current_path):
+                                        export_codes_for_segment(
+                                            seg_codes_dir=seg_codes_dir,
+                                            seg_current_path=seg_current_path,
+                                            window_frame_range_store=window_frame_range_store,
+                                            window_codes_store=window_codes_store,
+                                            window_quantized_store=window_quantized_store,
+                                            seg_start_frame=seg_start_frame,
+                                            seg_end_frame=seg_end_frame,
+                                            seg_start_win=seg_start_win,
+                                            T=T,
+                                            stride=stride,
+                                            target_fps=target_fps,
+                                            seg_align=seg_align,
+                                            seg_codes_min_overlap_ratio=seg_codes_min_overlap_ratio,
+                                            allow_overlap=seg_allow_overlap,
+                                        )
+                                except Exception as e:
+                                    print(f"[Seg][WARN] export codes failed: {e}")
                             seg_active = False
                             seg_writer = None
                             seg_start_win = -1
@@ -1097,10 +1125,15 @@ def run_streaming(args):
                                     pass
                                 # 若长度不足最小窗口数，删除文件；否则导出 codes
                                 try:
-                                    if seg_written_windows < max(1, int(seg_min_len_windows)) and seg_current_path is not None:
+                                    if seg_written_windows < int(seg_min_save_windows) and seg_current_path is not None:
                                         cleanup_segment_and_codes(seg_current_path)
+                                        print(
+                                            f"[Seg] DROP win#{int(windows_done)} len_windows={seg_written_windows} path={seg_current_path}"
+                                        )
                                     else:
-                                        print(f"[Seg] END win#{int(windows_done)} len_windows={seg_written_windows} path={seg_current_path}")
+                                        print(
+                                            f"[Seg] END win#{int(windows_done)} len_windows={seg_written_windows} path={seg_current_path}"
+                                        )
                                         try:
                                             if seg_export_codes and should_save_codes(seg_current_path):
                                                 export_codes_for_segment(
@@ -1108,6 +1141,7 @@ def run_streaming(args):
                                                     seg_current_path=seg_current_path,
                                                     window_frame_range_store=window_frame_range_store,
                                                     window_codes_store=window_codes_store,
+                                                    window_quantized_store=window_quantized_store,
                                                     seg_start_frame=seg_start_frame,
                                                     seg_end_frame=seg_end_frame,
                                                     seg_start_win=seg_start_win,
@@ -1148,6 +1182,9 @@ def run_streaming(args):
                         codes_drop = [k for k in window_codes_store.keys() if k < keep_from]
                         for k in codes_drop:
                             window_codes_store.pop(k, None)
+                        q_drop = [k for k in window_quantized_store.keys() if k < keep_from]
+                        for k in q_drop:
+                            window_quantized_store.pop(k, None)
                         range_drop = [k for k in window_frame_range_store.keys() if k < keep_from]
                         for k in range_drop:
                             window_frame_range_store.pop(k, None)
@@ -1270,8 +1307,11 @@ def run_streaming(args):
                     pass
                 try:
                     if 'seg_active' in locals() and seg_active:
-                        if seg_written_windows < max(1, int(seg_min_len_windows)) and seg_current_path is not None:
+                        if seg_written_windows < int(seg_min_save_windows) and seg_current_path is not None:
                             cleanup_segment_and_codes(seg_current_path)
+                            print(
+                                f"[Seg] DROP on exit len_windows={seg_written_windows} path={seg_current_path}"
+                            )
                         else:
                             print(f"[Seg] END on exit len_windows={seg_written_windows} path={seg_current_path}")
                 except Exception:

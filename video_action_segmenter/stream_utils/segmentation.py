@@ -115,6 +115,7 @@ def export_codes_for_segment(
     seg_align: str,
     seg_codes_min_overlap_ratio: float,
     allow_overlap: bool = False,
+    window_quantized_store: Optional[Dict[int, List[List[float]]]] = None,
 ) -> bool:
     """从缓存中筛选整窗 codes 并写入 sidecar JSON 文件。返回是否成功写入。"""
     try:
@@ -145,9 +146,17 @@ def export_codes_for_segment(
                 seg_end_frame=seg_end_frame,
                 seg_codes_min_overlap_ratio=seg_codes_min_overlap_ratio,
             )
+        if window_quantized_store is not None:
+            try:
+                quantized_windows = [window_quantized_store[w] for w in selected if w in window_quantized_store]
+            except Exception:
+                quantized_windows = None
+        else:
+            quantized_windows = None
         sidecar_path = seg_codes_dir / f"{seg_current_path.stem}.codes.json"
         meta = {
             "codes_windows": codes_windows,
+            "quantized_windows": quantized_windows,
             "selected_win_idxs": selected,
             "overlap_ratio_threshold": float(seg_codes_min_overlap_ratio),
             "segment": {
