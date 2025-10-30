@@ -80,6 +80,14 @@
     --out-dir action_classification/seq_embed_infer/ \
     --l2-normalize 
 
+  - 为带label的数据生成embeddings
+
+  python -m action_classification.scripts.export_label_sequence_embeddings \
+    --json-root /home/johnny/action_ws/label_data/d02 \
+    --model-pt /home/johnny/action_ws/action_classification/models/d02/model_best.pt \
+    --l2-normalize \
+    --out-subdir embeddings \
+    --codes-subdir codes
 
 ##### 第三步：执行聚类评估
 
@@ -90,12 +98,33 @@
     --config action_classification/configs/hdbscan_config.yaml \
     --out-dir action_classification/results/hdbscan_fits/
 
+  python -m action_classification.clustering.fit_hdbscan \
+    --embed-dir action_classification/seq_embed_infer/d02 \
+    --config action_classification/configs/hdbscan_config.yaml \
+    --out-dir action_classification/results/hdbscan_fits/
+
 - BayesGMM分类
 
   python -m action_classification.clustering.fit_bayes_gmm \
     --embed-dir action_classification/seq_embed_infer/d01 \
     --config action_classification/configs/bayes_gmm_config.yaml \
     --out-dir action_classification/results/bayes_gmm_fits/
+
+    python -m action_classification.clustering.fit_bayes_gmm \
+    --embed-dir action_classification/seq_embed_infer/d02 \
+    --config action_classification/configs/bayes_gmm_config.yaml \
+    --out-dir action_classification/results/bayes_gmm_fits/
+
+
+- 为带label的数据执行聚类，评估聚类质量
+
+  python -m action_classification.clustering.evaluate_label_cluster_quality \
+    --embed-root /home/johnny/action_ws/label_data/d02 \
+    --embed-subdir embeddings \
+    --config action_classification/configs/bayes_gmm_config.yaml \
+    --n-components 6 \
+    --out-dir action_classification/results/label_bayes_gmm_d02
+
 
 - ToDo
 

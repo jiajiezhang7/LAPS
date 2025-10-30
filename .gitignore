@@ -27,3 +27,4 @@ outputs/
 wandb/
 data/
 action_classification/results/
+label_data/

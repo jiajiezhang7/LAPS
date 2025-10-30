@@ -241,8 +241,9 @@ def main():
 
     # Build output dir
     out_base = Path(args.out_dir).resolve() if args.out_dir else (Path(__file__).resolve().parent / 'out' / 'hdbscan_fits')
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    out_dir = out_base / timestamp
+    # Use embed_dir folder name as subdirectory name
+    embed_dir_name = Path(args.embed_dir).resolve().name
+    out_dir = out_base / embed_dir_name
     ensure_dir(out_dir)
 
     # Save artifacts

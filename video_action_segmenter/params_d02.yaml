@@ -102,7 +102,7 @@ segmentation:
   report_path: "./video_action_segmenter/energy_sweep_report/d02_best_threshold_quantized_token_diff.json"
   report_key: "quantized_token_diff_best.best_f1.thr"  # 可改为 quantized_token_diff_best.best_j.thr
   min_len_windows: 2            # 片段最小连续正窗口数，低于此长度会丢弃
-  output_dir: "/media/johnny/48FF-AA60/online_inference_output/epochs5_complete500_d02_m10_cb2048_stride4"
+  output_dir: "/media/johnny/48FF-AA60/online_inference_output/epochs5_complete500_d02_m10_cb2048_stride4_vector"
   codec: "mp4v"                 # OpenCV fourcc，如 mp4v/avc1/XVID
   ext: ".mp4"                   # 输出文件扩展名
   align: "center"               # start | center | end；center：首个正窗口仅写半窗（后半），减少起点偏移
