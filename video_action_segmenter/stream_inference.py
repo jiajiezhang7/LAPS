@@ -274,6 +274,8 @@ def run_streaming(args):
     seg_codes_min_overlap_ratio = float(seg_cfg.get("codes_min_overlap_ratio", 0.25))
     # 新增：是否允许保存与片段重叠的所有候选窗口（不去重叠）
     seg_allow_overlap = bool(seg_cfg.get("allow_overlap", False))
+    # codes 窗口数过滤：少于此数量的片段视为噪声，不保存
+    seg_min_codes_windows = int(seg_cfg.get("min_codes_windows", 2))
     # 未开启分割时无需缓存大量窗口；开启时保留小历史窗口用于触发稳定判定
     seg_history_keep = max(4, int(seg_up_count) + int(seg_cooldown_windows) + 1)
 
@@ -1100,6 +1102,7 @@ def run_streaming(args):
                                             seg_align=seg_align,
                                             seg_codes_min_overlap_ratio=seg_codes_min_overlap_ratio,
                                             allow_overlap=seg_allow_overlap,
+                                            min_codes_windows=seg_min_codes_windows,
                                         )
                                 except Exception as e:
                                     print(f"[Seg][WARN] export codes failed: {e}")
@@ -1151,6 +1154,7 @@ def run_streaming(args):
                                                     seg_align=seg_align,
                                                     seg_codes_min_overlap_ratio=seg_codes_min_overlap_ratio,
                                                     allow_overlap=seg_allow_overlap,
+                                                    min_codes_windows=seg_min_codes_windows,
                                                 )
                                         except Exception as e:
                                             print(f"[Seg][WARN] export codes failed: {e}")

@@ -112,6 +112,7 @@ segmentation:
   down_count: 2                 # 连续<thr_off 才结束（去抖）
   cooldown_windows: 1           # 结束后冷却窗口数（禁止立刻重启）
   max_duration_seconds: 2.0     # 单段最大时长上限（秒）；设0禁用。优先用秒，可选改用 max_duration_windows
+  min_codes_windows: 2          # codes 窗口数过滤阈值：少于等于此数量的片段视为噪声，不保存（删除视频和 codes.json）
   # 片段 codes 导出配置（新增）
   export_codes: true            # 是否导出片段对应的 code indices 为 .codes.json 旁文件
   codes_min_overlap_ratio: 0.25 # 窗口与片段的最小重叠比例阈值（重叠帧数/T）；低于此比例的窗口不参与 codes 拼接

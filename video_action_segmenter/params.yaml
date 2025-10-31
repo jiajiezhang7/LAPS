@@ -115,6 +115,7 @@ segmentation:
   # 片段 codes 导出配置（新增）
   export_codes: true            # 是否导出片段对应的 code indices 为 .codes.json 旁文件
   codes_min_overlap_ratio: 0.25 # 窗口与片段的最小重叠比例阈值（重叠帧数/T）；低于此比例的窗口不参与 codes 拼接
+  min_codes_windows: 2          # codes 窗口数过滤阈值：少于等于此数量的片段视为噪声，不保存（删除视频和 codes.json）
   skip_if_exists: true
   allow_overlap: true          # 新增：当为 true 时，导出 codes 不再去重叠；保存所有满足重叠比例阈值的候选窗口
 

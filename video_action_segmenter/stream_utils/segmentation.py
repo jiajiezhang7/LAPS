@@ -116,8 +116,16 @@ def export_codes_for_segment(
     seg_codes_min_overlap_ratio: float,
     allow_overlap: bool = False,
     window_quantized_store: Optional[Dict[int, List[List[float]]]] = None,
+    min_codes_windows: int = 3,
 ) -> bool:
-    """从缓存中筛选整窗 codes 并写入 sidecar JSON 文件。返回是否成功写入。"""
+    """从缓存中筛选整窗 codes 并写入 sidecar JSON 文件。
+    
+    Args:
+        min_codes_windows: 最少需要的 codes 窗口数，少于此数量则视为噪声，不保存并删除视频片段
+    
+    Returns:
+        是否成功写入（如果窗口数不足，返回 False 并删除片段）
+    """
     try:
         if allow_overlap:
             # 收集所有满足重叠比例阈值的候选窗口（按起点排序），不做去重叠
@@ -146,6 +154,13 @@ def export_codes_for_segment(
                 seg_end_frame=seg_end_frame,
                 seg_codes_min_overlap_ratio=seg_codes_min_overlap_ratio,
             )
+        
+        # 关键过滤：如果 codes 窗口数不足最小要求，删除片段并返回 False
+        if len(codes_windows) <= min_codes_windows:
+            print(f"[Seg] DROP segment due to insufficient codes windows: {len(codes_windows)} <= {min_codes_windows}, path={seg_current_path}")
+            cleanup_segment_and_codes(seg_current_path)
+            return False
+        
         if window_quantized_store is not None:
             try:
                 quantized_windows = [window_quantized_store[w] for w in selected if w in window_quantized_store]
