@@ -313,6 +313,102 @@ def extract_seq_embeddings(series_list: List[np.ndarray], d_model: int, n_layers
     return np.asarray(embs, dtype=np.float32)
 
 
+# ---------------- 视频采样导出（验证聚类结果） ----------------
+from typing import Iterable
+import shutil
+
+ALLOWED_VIDEO_EXTS = [".mp4", ".avi", ".mkv", ".mov"]
+
+
+def _stem_without_codes(p: Path) -> str:
+    base = p.stem  # e.g., foo.codes
+    if base.endswith(".codes"):
+        base = base[: -len(".codes")]
+    return base
+
+
+def _resolve_video_for_json(json_path: Path) -> Optional[Path]:
+    """根据 JSON 路径，在相邻目录 segmented_videos 中查找同名视频（支持多种扩展名）。"""
+    try:
+        vdir = json_path.parent.parent / "segmented_videos"
+        base = _stem_without_codes(json_path)
+        # 先按常见扩展名精确匹配
+        for ext in ALLOWED_VIDEO_EXTS:
+            cand = vdir / f"{base}{ext}"
+            if cand.exists():
+                return cand
+        # 兜底：glob 同名的任意扩展名
+        for p in vdir.glob(f"{base}.*"):
+            if p.is_file():
+                return p
+    except Exception as e:
+        print(f"[WARN] 解析视频路径失败: {json_path} -> {e}")
+    return None
+
+
+def _unique_target(dst_dir: Path, filename: str) -> Path:
+    """若存在重名文件，在文件名后追加 _1/_2 序号。"""
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    base = Path(filename).stem
+    ext = Path(filename).suffix
+    candidate = dst_dir / f"{base}{ext}"
+    if not candidate.exists():
+        return candidate
+    n = 1
+    while True:
+        candidate = dst_dir / f"{base}_{n}{ext}"
+        if not candidate.exists():
+            return candidate
+        n += 1
+
+
+def export_video_samples(labels: np.ndarray, metas: List[Dict], out_root: Path, max_per_cluster: int = 100, seed: int = 42) -> List[Dict]:
+    """
+    将聚类标签映射回原始 JSON，查找相邻 segmented_videos 下的同名视频，并按簇采样导出。
+    返回每个簇的摘要行：cluster_id/total_samples/exported_samples/export_dir。
+    """
+    out_root.mkdir(parents=True, exist_ok=True)
+    rng = np.random.default_rng(seed)
+    summary: List[Dict] = []
+    uniq = sorted([int(u) for u in np.unique(labels)])
+    for cid in uniq:
+        idxs = np.where(labels == cid)[0]
+        idxs = idxs.tolist()
+        total = len(idxs)
+        if total == 0:
+            continue
+        # 采样索引
+        if total > max_per_cluster:
+            sampled = rng.choice(idxs, size=max_per_cluster, replace=False).tolist()
+        else:
+            sampled = idxs
+        dst_dir = out_root / f"cluster_{cid}"
+        exported = 0
+        for i in sampled:
+            jpath = Path(metas[i]["json_path"]) if isinstance(metas[i].get("json_path"), str) else None
+            if jpath is None:
+                print(f"[WARN] 缺少 json_path 元数据，索引={i}")
+                continue
+            vpath = _resolve_video_for_json(jpath)
+            if vpath is None:
+                print(f"[WARN] 未找到对应视频：{jpath}")
+                continue
+            try:
+                target = _unique_target(dst_dir, vpath.name)
+                shutil.copy2(str(vpath), str(target))
+                exported += 1
+            except Exception as e:
+                print(f"[WARN] 复制失败 {vpath} -> {dst_dir}: {e}")
+        print(f"[EXPORT] cluster {cid}: 总样本={total}, 采样={len(sampled)}, 成功导出={exported}, 目录={dst_dir}")
+        summary.append({
+            "cluster_id": int(cid),
+            "total_samples": int(total),
+            "exported_samples": int(exported),
+            "export_dir": str(dst_dir),
+        })
+    return summary
+
+
 # ---------------- 主流程 ----------------
 
 def save_metrics_csv(path: Path, method: str, results: Dict[int, Dict[str, float]], n_samples: int, dim: int):
@@ -346,6 +442,8 @@ def main():
     p.add_argument("--n-heads", type=int, default=4)
     p.add_argument("--pooling", type=str, default="mean", choices=["mean", "cls", "attn"])
     p.add_argument("--device", type=str, default="cpu")
+    p.add_argument("--export-video-samples", action="store_true", help="在 --use-best-grid-config 模式下，完成 k=3 聚类与可视化后，将每簇最多100个视频片段复制到 /home/johnny/action_ws/classify_res")
+
     args = p.parse_args()
 
     fig_dir = Path(args.fig_dir); fig_dir.mkdir(parents=True, exist_ok=True)
@@ -509,6 +607,22 @@ def main():
         if emb3 is not None:
             plot_umap_3d(emb3, labels_k3, title=f"UMAP 3D - best cfg k=3 (pool={pooling},d={d_model},L={n_layers},H={n_heads})", out_path=fig_dir / "umap_3d_best_config_k3.html")
             plot_umap_3d(emb3, labels_k5, title=f"UMAP 3D - best cfg k=5 (pool={pooling},d={d_model},L={n_layers},H={n_heads})", out_path=fig_dir / "umap_3d_best_config_k5.html")
+        # 视频采样导出（可选，需显式 --export-video-samples）
+        if args.export_video_samples:
+            out_root = Path("/home/johnny/action_ws/classify_res")
+            summary = export_video_samples(labels_k3, metas, out_root, max_per_cluster=100, seed=42)
+            # 写CSV汇总
+            try:
+                sum_csv = out_root / "cluster_summary.csv"
+                with open(sum_csv, "w", newline="", encoding="utf-8") as f:
+                    w = csv.writer(f)
+                    w.writerow(["cluster_id", "total_samples", "exported_samples", "export_dir"])
+                    for r in sorted(summary, key=lambda x: x["cluster_id"]):
+                        w.writerow([r["cluster_id"], r["total_samples"], r["exported_samples"], r["export_dir"]])
+                print(f"[EXPORT] 写入汇总: {sum_csv}")
+            except Exception as e:
+                print(f"[WARN] 写入汇总CSV失败: {e}")
+
         # 控制台摘要（便于外部收集）
         print("[K3] sil=%.4f DB=%.4f CH=%.2f Intra/Inter=%.4f sizes=%s" % (m_k3['silhouette'], m_k3['davies_bouldin'], m_k3['calinski_harabasz'], m_k3['intra_over_inter'], sizes_k3))
         print("[K5] sil=%.4f DB=%.4f CH=%.2f Intra/Inter=%.4f sizes=%s" % (m_k5['silhouette'], m_k5['davies_bouldin'], m_k5['calinski_harabasz'], m_k5['intra_over_inter'], sizes_k5))
