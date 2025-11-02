@@ -28,3 +28,5 @@ wandb/
 data/
 action_classification/results/
 label_data/
+umap_vis/figure/
+umap_vis/statistics/
