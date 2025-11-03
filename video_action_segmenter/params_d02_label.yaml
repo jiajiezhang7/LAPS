@@ -2,7 +2,7 @@
 # 将 25fps 视频流按时间重采样到 20fps，维护 T=16 环形缓冲；stride=4 触发一次窗口
 
 # 模型权重路径 (新的 amplify 框架)
-checkpoint_path: "/home/johnny/action_ws/checkpoints/motion_tokenizer/epochs5_complete500_d01_m10/best.pt"
+checkpoint_path: "/home/johnny/action_ws/checkpoints/motion_tokenizer/epochs5_complete500_d02_m10/best.pt"
 # 解码器窗口大小（用于速度归一化）
 decoder_window_size: 480  # 与训练时的 img_shape 短边一致
 
@@ -18,10 +18,10 @@ visualize: false
 input:
   type: "folder"   # camera | file | rtsp | folder
   # camera_index: 0   # 当 type=camera 时有效
-  path: "/media/johnny/48FF-AA60/raw_videos/raw_videos_d01_910_filterstatic/D01_20250810023400.mp4"   # 当 type=file 时有效；若设置为目录且 type=file，会自动切换为 folder 模式
+  path: "/media/johnny/48FF-AA60/raw_videos/raw_videos_d02_910_filterstatic/D02_20250811090632.mp4"   # 当 type=file 时有效；若设置为目录且 type=file，会自动切换为 folder 模式
   # url: "rtsp://user:pass@ip:port/stream"   # 当 type=rtsp 时有效
   # 目录批处理（type=folder 时使用；或当 path 指向目录时也会使用）
-  dir: "/media/johnny/48FF-AA60/raw_videos/raw_videos_d01_subset"  # 批处理目录
+  dir: "/home/johnny/action_ws/datasets/gt_raw_videos/D02"  # 批处理目录
   video_exts: [".mp4", ".mov", ".avi", ".mkv"]  # 支持的视频后缀（小写）
   recursive: true  # 是否递归子目录
   eof_timeout_seconds: 1.0  # 文件输入在连续无新帧超过该秒数时，判定为 EOF 并优雅退出当前视频
@@ -68,10 +68,10 @@ display_fps: 10
 # 能量曲线配置（用于实时观测动作能量）
 energy:
   enable: true                 # 是否计算窗口能量 E_t
-  source: "quantized"          # prequant | quantized | velocity --- best: quantized (用的是量化后的连续向量)
+  source: "quantized"          # prequant | quantized | velocity --- best: quantized
   mode: "token_diff_l2_mean"             # l2_mean | token_diff_l2_mean --- best: token_diff_l2_mean
   jsonl_output: true          # 可选：是否另写一份能量 JSONL
-  jsonl_path: "./video_action_segmenter/energy_sweep_out/stream_energy_velocity_token_diff_l2_mean.jsonl"
+  jsonl_path: "/home/johnny/action_ws/datasets/gt_annotations/D02"
   visualize: false              # 是否开启实时能量曲线窗口
   window_title: "Energy Curve"
   viz_window: 400              # 曲线缓存长度（窗口个数）
@@ -99,10 +99,10 @@ segmentation:
   enable: true                  # 是否启用阈值分割与片段保存
   mode: "report"                # fixed | report；report 模式会从报告JSON读取阈值
   threshold: 1.9326171875       # 当 mode=fixed 时使用；推荐 balanced thr=10.625，高召回 thr≈9.80
-  report_path: "./video_action_segmenter/energy_sweep_report/best_threshold_quantized_token_diff.json"
+  report_path: "./video_action_segmenter/energy_sweep_report/d02_best_threshold_quantized_token_diff.json"
   report_key: "quantized_token_diff_best.best_f1.thr"  # 可改为 quantized_token_diff_best.best_j.thr
   min_len_windows: 2            # 片段最小连续正窗口数，低于此长度会丢弃
-  output_dir: "/media/johnny/48FF-AA60/online_inference_output/epochs5_complete500_d01_m10_cb2048_stride4_vector"
+  output_dir: "/media/johnny/48FF-AA60/online_inference_output/epochs5_complete500_d02_m10_cb2048_stride4_vector"
   codec: "mp4v"                 # OpenCV fourcc，如 mp4v/avc1/XVID
   ext: ".mp4"                   # 输出文件扩展名
   align: "center"               # start | center | end；center：首个正窗口仅写半窗（后半），减少起点偏移
@@ -112,10 +112,10 @@ segmentation:
   down_count: 2                 # 连续<thr_off 才结束（去抖）
   cooldown_windows: 1           # 结束后冷却窗口数（禁止立刻重启）
   max_duration_seconds: 2.0     # 单段最大时长上限（秒）；设0禁用。优先用秒，可选改用 max_duration_windows
+  min_codes_windows: 2          # codes 窗口数过滤阈值：少于等于此数量的片段视为噪声，不保存（删除视频和 codes.json）
   # 片段 codes 导出配置（新增）
   export_codes: true            # 是否导出片段对应的 code indices 为 .codes.json 旁文件
   codes_min_overlap_ratio: 0.25 # 窗口与片段的最小重叠比例阈值（重叠帧数/T）；低于此比例的窗口不参与 codes 拼接
-  min_codes_windows: 2          # codes 窗口数过滤阈值：少于等于此数量的片段视为噪声，不保存（删除视频和 codes.json）
   skip_if_exists: true
   allow_overlap: true          # 新增：当为 true 时，导出 codes 不再去重叠；保存所有满足重叠比例阈值的候选窗口
 
@@ -124,4 +124,4 @@ export:
   prequant: false              # 是否导出未量化 latent (to_quantize)
   prequant_dir: "./video_action_segmenter/inference_outputs/stream_prequant"
 
-max_windows: 0
+max_windows: 5000

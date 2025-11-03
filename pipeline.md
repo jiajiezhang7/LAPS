@@ -96,7 +96,7 @@
 - 命令：
   ```bash
     python -m video_action_segmenter.stream_inference \
-      --params video_action_segmenter/params.yaml
+      --params video_action_segmenter/params_d01_label.yaml
   ```
 
     ```bash

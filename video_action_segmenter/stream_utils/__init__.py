@@ -5,6 +5,7 @@ This package groups helpers into thematic modules:
 - tracking_online: CoTracker online loader and per-window tracking
 - energy: energy computation and visualization helpers
 - stream_io: JSONL appenders and array export helpers
+- config_utils: configuration loading and utility functions
 """
 from .video import TimeResampler, resize_shorter_keep_aspect
 from .tracking_online import (
@@ -43,3 +44,10 @@ from .segmentation import (
 from .batch import (
     run_batch_over_folder,
 )
+from .config_utils import (
+    load_config,
+    _normalize_velocities,
+)
+from .inference_worker import create_compute_worker
+from .input_source import open_input_capture
+from .visualization import render_and_handle_windows

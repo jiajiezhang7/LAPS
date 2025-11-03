@@ -28,8 +28,8 @@ from typing import List, Optional, Tuple
 import cv2
 import numpy as np
 
-from amplify_motion_tokenizer.utils.helpers import load_config
 from video_action_segmenter.stream_utils import (
+    load_config,
     apply_smoothing_1d,
     draw_energy_plot_enhanced,
     draw_energy_plot_enhanced_dual,

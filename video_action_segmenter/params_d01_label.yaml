@@ -21,7 +21,7 @@ input:
   path: "/media/johnny/48FF-AA60/raw_videos/raw_videos_d01_910_filterstatic/D01_20250810023400.mp4"   # 当 type=file 时有效；若设置为目录且 type=file，会自动切换为 folder 模式
   # url: "rtsp://user:pass@ip:port/stream"   # 当 type=rtsp 时有效
   # 目录批处理（type=folder 时使用；或当 path 指向目录时也会使用）
-  dir: "/media/johnny/48FF-AA60/raw_videos/raw_videos_d01_subset"  # 批处理目录
+  dir: "/home/johnny/action_ws/datasets/gt_raw_videos/D01"  # 批处理目录
   video_exts: [".mp4", ".mov", ".avi", ".mkv"]  # 支持的视频后缀（小写）
   recursive: true  # 是否递归子目录
   eof_timeout_seconds: 1.0  # 文件输入在连续无新帧超过该秒数时，判定为 EOF 并优雅退出当前视频
@@ -102,7 +102,7 @@ segmentation:
   report_path: "./video_action_segmenter/energy_sweep_report/best_threshold_quantized_token_diff.json"
   report_key: "quantized_token_diff_best.best_f1.thr"  # 可改为 quantized_token_diff_best.best_j.thr
   min_len_windows: 2            # 片段最小连续正窗口数，低于此长度会丢弃
-  output_dir: "/media/johnny/48FF-AA60/online_inference_output/epochs5_complete500_d01_m10_cb2048_stride4_vector"
+  output_dir: "/home/johnny/action_ws/datasets/gt_annotations/D01"
   codec: "mp4v"                 # OpenCV fourcc，如 mp4v/avc1/XVID
   ext: ".mp4"                   # 输出文件扩展名
   align: "center"               # start | center | end；center：首个正窗口仅写半窗（后半），减少起点偏移

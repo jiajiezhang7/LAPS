@@ -24,9 +24,9 @@ import os
 import cv2
 import numpy as np
 import torch
-from amplify_motion_tokenizer.utils.helpers import load_config
-from amplify_motion_tokenizer.inference_short_clip import _normalize_velocities
-from video_action_segmenter.stream_utils.gating import (
+from video_action_segmenter.stream_utils import (
+    load_config,
+    _normalize_velocities,
     pre_gate_check,
     motion_gate_check,
 )

@@ -21,7 +21,7 @@ input:
   path: "/media/johnny/48FF-AA60/raw_videos/raw_videos_d02_910_filterstatic/D02_20250811090632.mp4"   # 当 type=file 时有效；若设置为目录且 type=file，会自动切换为 folder 模式
   # url: "rtsp://user:pass@ip:port/stream"   # 当 type=rtsp 时有效
   # 目录批处理（type=folder 时使用；或当 path 指向目录时也会使用）
-  dir: "/media/johnny/48FF-AA60/raw_videos/raw_videos_d02_910_filterstatic"  # 批处理目录
+  dir: "/media/johnny/48FF-AA60/raw_videos/raw_videos_d02_subset"  # 批处理目录
   video_exts: [".mp4", ".mov", ".avi", ".mkv"]  # 支持的视频后缀（小写）
   recursive: true  # 是否递归子目录
   eof_timeout_seconds: 1.0  # 文件输入在连续无新帧超过该秒数时，判定为 EOF 并优雅退出当前视频

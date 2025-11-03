@@ -43,6 +43,8 @@ from video_action_segmenter.stream_utils import (
     export_codes_for_segment,
     run_batch_over_folder,
 )
+from video_action_segmenter.stream_utils import create_compute_worker, open_input_capture, render_and_handle_windows
+
 
 
 def load_config(config_path):
@@ -72,7 +74,7 @@ def run_streaming(args):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     else:
         device = torch.device(device_str)
-    
+
     if device.type == "cuda" and args.gpu_id is not None:
         device = torch.device(f"cuda:{args.gpu_id}")
         try:
@@ -84,20 +86,20 @@ def run_streaming(args):
     checkpoint_path = Path(cfg["checkpoint_path"]).resolve()
     if not checkpoint_path.exists():
         raise FileNotFoundError(f"未找到权重文件: {checkpoint_path}")
-    
+
     # Load checkpoint
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
     model_cfg = OmegaConf.create(checkpoint['config'])
-    
+
     # Handle compiled models
     if model_cfg.get('compile', False) or "_orig_mod." in str(list(checkpoint['model'].keys())[0]):
         checkpoint['model'] = unwrap_compiled_state_dict(checkpoint['model'])
-    
+
     # Create model
     model = MotionTokenizer(model_cfg, load_encoder=True, load_decoder=True).to(device)
     model.load_state_dict(checkpoint['model'], strict=False)
     model.eval()
-    
+
     print(f"[Model] Loaded checkpoint from: {checkpoint_path}")
     print(f"[Model] Checkpoint epoch: {checkpoint.get('epoch', 'unknown')}")
 
@@ -108,7 +110,7 @@ def run_streaming(args):
     W_dec = 480  # Default window size for normalization (can be overridden in cfg)
     if 'decoder_window_size' in cfg:
         W_dec = int(cfg['decoder_window_size'])
-    
+
     # Get FSQ levels from codebook size
     codebook_size = int(model_cfg.codebook_size)
     power = int(np.log2(codebook_size))
@@ -120,7 +122,7 @@ def run_streaming(args):
         fsq_levels = [7, 5, 5, 5, 5]
     else:
         fsq_levels = []  # Will be inferred from data if needed
-    
+
     print(f"[Model] T={T}, N={N}, grid_size={grid_size}, codebook_size={codebook_size}, fsq_levels={fsq_levels}")
 
     target_fps = int(cfg.get("target_fps", 20))
@@ -326,90 +328,8 @@ def run_streaming(args):
     except Exception:
         eof_timeout_seconds = 1.0
     src_type = str(input_cfg.get("type", "camera")).lower()  # camera | file | rtsp | folder
-    # 子进程批处理覆盖：若设置了 MT_OVERRIDE_INPUT_PATH，则无论原配置为何，强制按 file 模式处理单个视频
-    _override_path_env = os.environ.get("MT_OVERRIDE_INPUT_PATH", "").strip()
-    if _override_path_env:
-        src_type = "file"
-    cap: Optional[cv2.VideoCapture] = None
-    video_name = "unknown"  # 默认视频名称
-    
-    if src_type == "camera":
-        cam_index = int(input_cfg.get("camera_index", 0))
-        cap = cv2.VideoCapture(cam_index)
-        video_name = f"camera_{cam_index}"
-    elif src_type == "file":
-        # 支持通过环境变量覆盖单视频路径（用于 folder 批处理子进程传参）
-        path_env = os.environ.get("MT_OVERRIDE_INPUT_PATH", "").strip()
-        path_cfg = str(input_cfg.get("path", "")).strip()
-        path = path_env or path_cfg
-        cap = cv2.VideoCapture(path)
-        # 从文件路径提取视频名称（不含扩展名）
-        if path:
-            video_name = Path(path).stem
-        else:
-            video_name = "unknown_file"
-        # 当给定路径为目录时，切换到 folder 批处理模式
-        if path and os.path.isdir(path):
-            src_type = "folder"
-            cap.release()
-            cap = None
-    elif src_type == "rtsp":
-        url = str(input_cfg.get("url", ""))
-        cap = cv2.VideoCapture(url)
-        # 从RTSP URL提取名称或使用默认名称
-        try:
-            from urllib.parse import urlparse
-            parsed = urlparse(url)
-            if parsed.path:
-                video_name = Path(parsed.path).stem or "rtsp_stream"
-            else:
-                video_name = "rtsp_stream"
-        except Exception:
-            video_name = "rtsp_stream"
-    elif src_type == "folder":
-        # 在下方批处理分支中处理，这里仅占位避免被判为不支持
-        cap = None
-        video_name = "batch_folder"
-    else:
-        raise ValueError(f"不支持的输入类型: {src_type}")
-
-    # 目录批处理模式：依次对文件夹中的所有视频运行当前脚本（子进程方式），通过环境变量传递路径
-    if src_type == "folder":
-        in_dir = str(input_cfg.get("dir", "")).strip() or (path if 'path' in locals() else "")
-        if not in_dir:
-            raise RuntimeError("folder 模式需要提供 input.dir 或 input.path 为目录")
-        exts = input_cfg.get("video_exts", [".mp4", ".mov", ".avi", ".mkv"])
-        try:
-            exts = [str(e).lower() for e in exts]
-        except Exception:
-            exts = [".mp4", ".mov", ".avi", ".mkv"]
-        recursive = bool(input_cfg.get("recursive", True))
-        batch_cfg = input_cfg.get("batch", {}) if isinstance(input_cfg.get("batch", {}), dict) else {}
-        enable_parallel = bool(batch_cfg.get("enable_parallel", False))
-        gpu_ids_cfg = batch_cfg.get("gpu_ids", None)
-        if isinstance(gpu_ids_cfg, (list, tuple)):
-            gpu_ids = list(gpu_ids_cfg)
-        else:
-            gpu_ids = None
-        try:
-            max_procs_per_gpu = int(batch_cfg.get("max_procs_per_gpu", 1))
-        except Exception:
-            max_procs_per_gpu = 1
-        try:
-            poll_interval = float(batch_cfg.get("poll_interval_seconds", 0.2))
-        except Exception:
-            poll_interval = 0.2
-
-        run_batch_over_folder(
-            Path(in_dir),
-            args.params,
-            exts=exts,
-            recursive=recursive,
-            enable_parallel=enable_parallel,
-            gpu_ids=gpu_ids,
-            max_procs_per_gpu=max_procs_per_gpu,
-            poll_interval=poll_interval,
-        )
+    cap, src_type, video_name, handled_folder = open_input_capture(input_cfg, args.params)
+    if handled_folder:
         return
 
     # 若为单文件模式且启用跳过逻辑：检查目标输出是否已有该视频名的结果，若有则直接跳过
@@ -464,273 +384,31 @@ def run_streaming(args):
                 energy_window_ok = False
 
     # 后台计算线程：解耦显示/采样 与 重计算
-    job_q: Queue = Queue(maxsize=1)        # 仅保留最新待处理窗口，防止积压
-    result_q: Queue = Queue(maxsize=16)    # 结果缓冲
-    stop_event = threading.Event()
-
-    def compute_worker():
-        # 可选：设置 CUDA 设备，防止多线程环境下设备不一致
-        try:
-            if device.type == 'cuda' and device.index is not None:
-                torch.cuda.set_device(device.index)
-        except Exception:
-            pass
-
-        while not stop_event.is_set():
-            try:
-                job = job_q.get(timeout=0.1)
-            except Empty:
-                continue
-            if job is None:
-                break
-            win_idx: int = job["win_idx"]
-            frames: List[np.ndarray] = job["frames"]
-
-            # 跟踪 + 前向
-            try:
-                # 1) 前置像素差分 门控（在 CoTracker 前）
-                if pre_gate_enable:
-                    dropped, mad_val, act_ratio = pre_gate_check(
-                        frames,
-                        resize_shorter=pre_gate_resize_shorter,
-                        pixel_diff_thr=pre_gate_pixel_diff_thr,
-                        mad_thr=pre_gate_mad_thr,
-                        min_active_ratio=pre_gate_min_active_ratio,
-                        method=pre_gate_method,
-                        debug=pre_gate_debug,
-                    )
-                    if dropped:
-                        if pre_gate_debug:
-                            print(f"[PreGate] DROP win#{win_idx}: mad={mad_val:.6f}(<{pre_gate_mad_thr}) ratio={act_ratio:.4f}(<{pre_gate_min_active_ratio})")
-                        energy_val_pg = 0.0 if energy_enable else None
-                        result = {
-                            "win_idx": win_idx,
-                            "t_track": 0.0,
-                            "t_forward": 0.0,
-                            "d": 0,
-                            "D": 0,
-                            "codes": None,
-                            "used_digits_merge": False,
-                            "energy": energy_val_pg if energy_val_pg is not None else None,
-                            "energy_source": str(energy_source),
-                            "energy_mode": energy_mode,
-                            "prequant_path": None,
-                            "pre_gate": {
-                                "dropped": True,
-                                "mad": mad_val,
-                                "active_ratio": act_ratio,
-                                "mad_thr": pre_gate_mad_thr,
-                                "pixel_diff_thr": pre_gate_pixel_diff_thr,
-                                "min_active_ratio": pre_gate_min_active_ratio,
-                            },
-                        }
-                        try:
-                            result_q.put_nowait(result)
-                        except Exception:
-                            try:
-                                _ = result_q.get_nowait()
-                            except Empty:
-                                pass
-                            try:
-                                result_q.put_nowait(result)
-                            except Exception:
-                                pass
-                        continue
-
-                # 2) CoTracker 跟踪
-                t0 = time.perf_counter()
-                vel_pix = track_window_with_online(frames, grid_size=grid_size, device=device)  # (T-1,N,2) on CPU
-                t_track = time.perf_counter() - t0
-
-                t1 = time.perf_counter()
-                vel_norm = _normalize_velocities(vel_pix, window_size=W_dec)
-                # 速度阈值门控：检测“全静止”窗口，跳过后续前向以节省计算
-                if motion_gate_enable:
-                    dropped, v_l2_mean, active_ratio = motion_gate_check(
-                        vel_norm,
-                        vel_norm_thr=float(motion_gate_vel_thr),
-                        min_active_ratio=float(motion_gate_min_active_ratio),
-                        debug=motion_gate_debug,
-                    )
-                    if dropped:
-                        if motion_gate_debug:
-                            print(f"[Gate] DROP win#{win_idx}: mean={v_l2_mean:.6f}(<{motion_gate_vel_thr}) ratio={active_ratio:.4f}(<{motion_gate_min_active_ratio})")
-                        energy_val_gate: Optional[float] = None
-                        used_energy_source = str(energy_source)
-                        if energy_enable and str(energy_source).lower() == "velocity":
-                            try:
-                                energy_val_gate = compute_energy(
-                                    source="velocity",
-                                    mode=energy_mode,
-                                    to_quantize=None,
-                                    quantized=None,
-                                    vel_norm=vel_norm,
-                                )
-                            except Exception:
-                                energy_val_gate = None
-                            else:
-                                used_energy_source = "velocity"
-                        if energy_val_gate is None:
-                            energy_val_gate = 0.0
-
-                        result = {
-                            "win_idx": win_idx,
-                            "t_track": t_track,
-                            "t_forward": 0.0,
-                            "d": 0,
-                            "D": 0,
-                            "codes": None,
-                            "used_digits_merge": False,
-                            "energy": energy_val_gate,
-                            "energy_source": used_energy_source,
-                            "energy_mode": energy_mode,
-                            "prequant_path": None,
-                            "motion_gate": {
-                                "dropped": True,
-                                "l2_mean": v_l2_mean,
-                                "active_ratio": active_ratio,
-                                "vel_norm_thr": motion_gate_vel_thr,
-                                "min_active_ratio": motion_gate_min_active_ratio,
-                            },
-                        }
-                        try:
-                            result_q.put_nowait(result)
-                        except Exception:
-                            try:
-                                _ = result_q.get_nowait()
-                            except Empty:
-                                pass
-                            try:
-                                result_q.put_nowait(result)
-                            except Exception:
-                                pass
-                        continue  # 跳过后续模型前向
-
-                # 使用新模型的 encode/quantize API
-                # 新模型期望输入: (B, V, T, N, D) 其中 V=views, T=时间步, N=点数, D=2(xy坐标)
-                # vel_norm: (T-1, N, 2) -> reshape to (1, 1, T-1, N, 2)
-                Tm1, N_local, _ = vel_norm.shape
-                x_input = vel_norm.unsqueeze(0).unsqueeze(0).to(device)  # (1, 1, T-1, N, 2)
-
-                # AMP autocast（仅 CUDA 且 amp=True 有效）
-                try:
-                    autocast_ctx = torch.cuda.amp.autocast(enabled=amp and device.type == 'cuda')
-                except Exception:
-                    class _Dummy:
-                        def __enter__(self):
-                            return None
-                        def __exit__(self, exc_type, exc, tb):
-                            return False
-                    autocast_ctx = _Dummy()
-
-                # 推理模式可进一步减少版本计数与内存占用
-                with torch.inference_mode():
-                    with autocast_ctx:
-                        # Encode to latent space (before quantization)
-                        to_quantize = model.encode(x_input, cond=None)  # (B, seq_len, hidden_dim)
-                        
-                        # Quantize using FSQ
-                        quantized, fsq_indices = model.quantize(to_quantize)  # FSQ returns (quantized, indices)
-
-                t_forward = time.perf_counter() - t1
-
-                # 计算 codes（如可用）
-                # 新的 FSQ 直接返回合并后的 code IDs: (B, seq_len)
-                code_ids_seq_list = None
-                used_digits_merge = False
-                if isinstance(fsq_indices, torch.Tensor):
-                    try:
-                        # fsq_indices: (1, seq_len) -> flatten to (seq_len,)
-                        code_ids_seq = fsq_indices.squeeze(0).to(torch.int16)  # (seq_len,)
-                        code_ids_seq_list = [int(v) for v in code_ids_seq.tolist()]
-                        used_digits_merge = True  # FSQ already merged digits internally
-                    except Exception as e:
-                        print(f"[Stream][WARN] FSQ code conversion failed: {e}")
-                        code_ids_seq_list = None
-                
-                # 在 GPU 上的中间张量：显式转移到 CPU，尽快释放显存
-                to_quantize_cpu = to_quantize.detach().cpu() if isinstance(to_quantize, torch.Tensor) else None
-                quantized_cpu = quantized.detach().cpu() if isinstance(quantized, torch.Tensor) else None
-
-                quantized_seq_list = None
-                if seg_enable and seg_export_codes and isinstance(quantized_cpu, torch.Tensor):
-                    try:
-                        q = quantized_cpu.squeeze(0)  # (seq_len, hidden_dim)
-                        quantized_seq_list = q.to(torch.float32).numpy().tolist()
-                    except Exception:
-                        quantized_seq_list = None
-                
-                # 显式删除大中间变量，减少 CUDA caching allocator 的峰值
-                try:
-                    del x_input, to_quantize, quantized, fsq_indices
-                except Exception:
-                    pass
-
-                # 计算能量（可选）
-                energy_val: Optional[float] = None
-                if energy_enable:
-                    energy_val = compute_energy(
-                        source=energy_source,
-                        mode=energy_mode,
-                        to_quantize=to_quantize_cpu,
-                        quantized=quantized_cpu,
-                        vel_norm=vel_norm,
-                    )
-
-                # 可选导出未量化 latent（to_quantize）
-                prequant_path = export_prequant_npy(prequant_dir, win_idx, to_quantize_cpu) if export_prequant and to_quantize_cpu is not None else None
-
-                # 维度从 CPU 张量读取（若存在）
-                if to_quantize_cpu is not None:
-                    d = int(to_quantize_cpu.shape[1])
-                    D_dim = int(to_quantize_cpu.shape[2])
-                else:
-                    d = 0
-                    D_dim = 0
-
-                result = {
-                    "win_idx": win_idx,
-                    "t_track": t_track,
-                    "t_forward": t_forward,
-                    "d": d,
-                    "D": D_dim,
-                    "codes": code_ids_seq_list,
-                    "used_digits_merge": used_digits_merge,
-                    "quantized_vectors": quantized_seq_list,
-                    "energy": energy_val,
-                    "energy_source": energy_source,
-                    "energy_mode": energy_mode,
-                    "prequant_path": prequant_path,
-                }
-                try:
-                    result_q.put_nowait(result)
-                except Exception:
-                    # 若结果队列满，丢弃最旧结果以保证最新状态
-                    try:
-                        _ = result_q.get_nowait()
-                    except Empty:
-                        pass
-                    try:
-                        result_q.put_nowait(result)
-                    except Exception:
-                        pass
-            except Exception as e:
-                # 将异常作为一条结果返回，便于主线程打印
-                err = {"win_idx": win_idx, "error": str(e)}
-                try:
-                    result_q.put_nowait(err)
-                except Exception:
-                    pass
-                # 异常情况下的清理，尽量丢弃潜在的 GPU/CPU 大对象引用
-                for _nm in ("first_frame_clip", "video", "pred_tracks", "pred_visibility", "clip", "x", "encoded", "proj_in", "proj_out", "to_quantize", "quantized", "fsq_indices"):
-                    try:
-                        if _nm in locals():
-                            del locals()[_nm]
-                    except Exception:
-                        pass
-
-    worker = threading.Thread(target=compute_worker, daemon=True)
-    worker.start()
+    worker, job_q, result_q, stop_event = create_compute_worker(
+        model=model,
+        device=device,
+        grid_size=grid_size,
+        W_dec=W_dec,
+        amp=amp,
+        energy_enable=energy_enable,
+        energy_source=energy_source,
+        energy_mode=energy_mode,
+        export_prequant=export_prequant,
+        prequant_dir=prequant_dir,
+        seg_enable=seg_enable,
+        seg_export_codes=seg_export_codes,
+        pre_gate_enable=pre_gate_enable,
+        pre_gate_resize_shorter=pre_gate_resize_shorter,
+        pre_gate_pixel_diff_thr=pre_gate_pixel_diff_thr,
+        pre_gate_mad_thr=pre_gate_mad_thr,
+        pre_gate_min_active_ratio=pre_gate_min_active_ratio,
+        pre_gate_method=pre_gate_method,
+        pre_gate_debug=pre_gate_debug,
+        motion_gate_enable=motion_gate_enable,
+        motion_gate_vel_thr=motion_gate_vel_thr,
+        motion_gate_min_active_ratio=motion_gate_min_active_ratio,
+        motion_gate_debug=motion_gate_debug,
+    )
 
     resampler = TimeResampler(target_fps)
     ring: Deque[np.ndarray] = deque(maxlen=T)
@@ -782,7 +460,7 @@ def run_streaming(args):
     avg_forward = 0.0
     avg_total = 0.0
     alpha = 0.1  # EMA 系数
-    
+
     reached_max_windows = False
     # EOF 侦测：记录最后一次成功读取帧的时间与连续失败次数
     last_ok_read_ts = time.perf_counter()
@@ -825,64 +503,38 @@ def run_streaming(args):
 
             # 可视化：每次发出采样帧时进行播放
             if window_ok:
-                try:
-                    disp = frame.copy()
-                    if show_overlay:
-                        # 左上角叠加基本状态
-                        y0, dy = 24, 20
-                        cv2.putText(disp, f"T={T} stride={stride} grid={grid_size}", (10, y0), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,255), 1, cv2.LINE_AA)
-                        cv2.putText(disp, f"win={windows_done} track(EMA)={avg_track:.3f}s fwd(EMA)={avg_forward:.3f}s", (10, y0+dy), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (240,240,240), 1, cv2.LINE_AA)
-                        if seg_enable:
-                            seg_color = (0, 0, 255) if seg_active else (180, 180, 180)
-                            cv2.putText(disp, f"SEG={'ON' if seg_active else 'OFF'} thr={seg_threshold:.3f}", (10, y0+2*dy), cv2.FONT_HERSHEY_SIMPLEX, 0.6, seg_color, 1, cv2.LINE_AA)
-                    cv2.imshow(window_title, disp)
-                    # 更新能量曲线窗口
-                    if energy_window_ok:
-                        if energy_viz_style == "enhanced":
-                            if smoothing_enable and smoothing_visualize_both and (len(energy_ring) > 0 or len(energy_smooth_ring) > 0):
-                                energy_img = draw_energy_plot_enhanced_dual(
-                                    raw_values=list(energy_ring),
-                                    smooth_values=list(energy_smooth_ring),
-                                    width=energy_plot_w, height=energy_plot_h,
-                                    y_min=energy_y_min, y_max=energy_y_max,
-                                    theme=energy_theme,
-                                    show_grid=True, show_labels=True, show_legend=True, show_statistics=True,
-                                    title=energy_window_title,
-                                )
-                                cv2.imshow(energy_window_title, energy_img)
-                            elif len(energy_ring) > 0:
-                                values_to_plot = list(energy_smooth_ring) if smoothing_enable else list(energy_ring)
-                                energy_img = draw_energy_plot_enhanced(
-                                    values=values_to_plot,
-                                    width=energy_plot_w, height=energy_plot_h,
-                                    y_min=energy_y_min, y_max=energy_y_max,
-                                    theme=energy_theme,
-                                    show_grid=True, show_labels=True, show_statistics=True,
-                                    title=energy_window_title,
-                                )
-                                cv2.imshow(energy_window_title, energy_img)
-                        else:
-                            if smoothing_enable and smoothing_visualize_both and (len(energy_ring) > 0 or len(energy_smooth_ring) > 0):
-                                energy_img = draw_energy_plot_two(
-                                    list(energy_ring), list(energy_smooth_ring),
-                                    width=energy_plot_w, height=energy_plot_h,
-                                    y_min=energy_y_min, y_max=energy_y_max,
-                                    color_raw=energy_color, color_smooth=(0, 165, 255)
-                                )
-                                cv2.imshow(energy_window_title, energy_img)
-                            elif len(energy_ring) > 0:
-                                values_to_plot = list(energy_smooth_ring) if smoothing_enable else list(energy_ring)
-                                energy_img = draw_energy_plot(values_to_plot, width=energy_plot_w, height=energy_plot_h,
-                                                              y_min=energy_y_min, y_max=energy_y_max, color=energy_color)
-                                cv2.imshow(energy_window_title, energy_img)
-                    # 轻量 waitKey 以刷新窗口并响应按键
-                    key = cv2.waitKey(max(1, int(1000/max(1, display_fps)))) & 0xFF
-                    if key == ord('q'):
-                        break
-                except Exception:
-                    # 若图形后端异常，自动降级为无窗口模式
-                    window_ok = False
-                    energy_window_ok = False
+                window_ok, energy_window_ok, _quit = render_and_handle_windows(
+                    frame=frame,
+                    window_ok=window_ok,
+                    energy_window_ok=energy_window_ok,
+                    visualize=visualize,
+                    show_overlay=show_overlay,
+                    window_title=window_title,
+                    seg_enable=seg_enable,
+                    seg_active=seg_active,
+                    seg_threshold=seg_threshold,
+                    avg_track=avg_track,
+                    avg_forward=avg_forward,
+                    windows_done=windows_done,
+                    T=T,
+                    stride=stride,
+                    grid_size=grid_size,
+                    energy_window_title=energy_window_title,
+                    energy_viz_style=energy_viz_style,
+                    smoothing_enable=smoothing_enable,
+                    smoothing_visualize_both=smoothing_visualize_both,
+                    energy_ring=energy_ring,
+                    energy_smooth_ring=energy_smooth_ring,
+                    energy_plot_w=energy_plot_w,
+                    energy_plot_h=energy_plot_h,
+                    energy_y_min=energy_y_min,
+                    energy_y_max=energy_y_max,
+                    energy_theme=energy_theme,
+                    display_fps=display_fps,
+                    energy_color=energy_color,
+                )
+                if _quit:
+                    break
 
             # 尝试从后台取回结果并打印
             while True:
@@ -1007,7 +659,7 @@ def run_streaming(args):
                                 except Exception:
                                     seg_writer = None
                                     seg_current_path = None
-                            
+
                             # 只有当成功创建了视频写入器时，才启动片段
                             if seg_writer is not None and seg_current_path is not None:
                                 seg_active = True
@@ -1229,7 +881,7 @@ def run_streaming(args):
                                 print(f"[Mem][GPU{dev_idx}] empty_cache() called at win#{windows_done}")
                     except Exception:
                         pass
-                
+
             if reached_max_windows:
                 break
             # 尚未积满 T 帧

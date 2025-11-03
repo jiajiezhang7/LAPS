@@ -9,8 +9,8 @@
 # 目录模式：
 #   1) 设置 input_dir 为目录路径；或
 #   2) 将 video 设置为目录路径（同样按目录模式处理）。
-video: /media/johnny/Data/data_motion_tokenizer/cotracker_demo
-output_dir: video_action_segmenter/inference_outputs/windows  # 输出根目录
+video: /home/johnny/action_ws/datasets/cotracker_demo/raw_videos
+output_dir: /home/johnny/action_ws/datasets/cotracker_demo/tracked_videos  # 输出根目录
 
 # 目录模式可选参数（若不需要可保持为空/默认）：
 # input_dir: /path/to/folder
@@ -42,7 +42,7 @@ point_radius: 3    # 关键点绘制半径
 line_thickness: 2 # 轨迹线宽
 
 # ===== 静态点过滤 =====
-static_filter_thresh: 1.5 # 静态点过滤阈值（像素）。点在窗口内的最大位移小于此值则被过滤。设为0禁用。
+static_filter_thresh: 10.0 # 静态点过滤阈值（像素）。点在窗口内的最大位移小于此值则被过滤。设为0禁用。
 
 # ===== 门控设置（用于跳过静止窗口） =====
 motion_gate:
