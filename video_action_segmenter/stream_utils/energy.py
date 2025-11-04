@@ -154,6 +154,45 @@ def _draw_styled_line(
         t += step
 
 
+def _draw_arrow(
+    img: np.ndarray,
+    pt: Tuple[int, int],
+    direction: str,
+    color: Tuple[int, int, int],
+    size: int = 8,
+    thickness: int = 2,
+):
+    """Draw a small arrow at the end of an axis.
+    
+    Args:
+        img: Image to draw on
+        pt: Tip position of the arrow
+        direction: 'up', 'down', 'left', or 'right'
+        color: Arrow color (BGR)
+        size: Arrow size in pixels
+        thickness: Line thickness
+    """
+    x, y = pt
+    half_size = size // 2
+    
+    if direction == "up":
+        # Arrow pointing up
+        cv2.line(img, (x, y), (x - half_size, y + size), color, thickness, cv2.LINE_AA)
+        cv2.line(img, (x, y), (x + half_size, y + size), color, thickness, cv2.LINE_AA)
+    elif direction == "down":
+        # Arrow pointing down
+        cv2.line(img, (x, y), (x - half_size, y - size), color, thickness, cv2.LINE_AA)
+        cv2.line(img, (x, y), (x + half_size, y - size), color, thickness, cv2.LINE_AA)
+    elif direction == "left":
+        # Arrow pointing left
+        cv2.line(img, (x, y), (x + size, y - half_size), color, thickness, cv2.LINE_AA)
+        cv2.line(img, (x, y), (x + size, y + half_size), color, thickness, cv2.LINE_AA)
+    elif direction == "right":
+        # Arrow pointing right
+        cv2.line(img, (x, y), (x - size, y - half_size), color, thickness, cv2.LINE_AA)
+        cv2.line(img, (x, y), (x - size, y + half_size), color, thickness, cv2.LINE_AA)
+
+
 def draw_energy_plot(
     values: List[float],
     width: int = 600,
@@ -430,6 +469,7 @@ def draw_energy_plot_enhanced(
     show_grid: bool = True,
     show_labels: bool = True,
     show_statistics: bool = True,
+    show_border: bool = True,
     line_width: int = 2,
     title: str = "Energy Curve",
     threshold_lines: Optional[Sequence] = None,
@@ -528,7 +568,15 @@ def draw_energy_plot_enhanced(
     vmax_plot = vmax + pad
     
     # Draw plot border
-    cv2.rectangle(img, (plot_x, plot_y), (plot_x + plot_w, plot_y + plot_h), colors["axis"], 2)
+    if show_border:
+        cv2.rectangle(img, (plot_x, plot_y), (plot_x + plot_w, plot_y + plot_h), colors["axis"], 2)
+    else:
+        # Draw axes without border: Y-axis (left) and X-axis (bottom)
+        cv2.line(img, (plot_x, plot_y), (plot_x, plot_y + plot_h), colors["axis"], 2)  # Y-axis
+        cv2.line(img, (plot_x, plot_y + plot_h), (plot_x + plot_w, plot_y + plot_h), colors["axis"], 2)  # X-axis
+        # Draw small arrows at the end of axes
+        _draw_arrow(img, (plot_x, plot_y), "up", colors["axis"], size=6, thickness=1)  # Y-axis arrow
+        _draw_arrow(img, (plot_x + plot_w, plot_y + plot_h), "right", colors["axis"], size=6, thickness=1)  # X-axis arrow
     
     # Draw grid
     if show_grid:

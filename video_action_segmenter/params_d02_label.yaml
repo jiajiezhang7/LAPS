@@ -102,7 +102,7 @@ segmentation:
   report_path: "./video_action_segmenter/energy_sweep_report/d02_best_threshold_quantized_token_diff.json"
   report_key: "quantized_token_diff_best.best_f1.thr"  # 可改为 quantized_token_diff_best.best_j.thr
   min_len_windows: 2            # 片段最小连续正窗口数，低于此长度会丢弃
-  output_dir: "/media/johnny/48FF-AA60/online_inference_output/epochs5_complete500_d02_m10_cb2048_stride4_vector"
+  output_dir: "/home/johnny/action_ws/datasets/gt_annotations/D02"
   codec: "mp4v"                 # OpenCV fourcc，如 mp4v/avc1/XVID
   ext: ".mp4"                   # 输出文件扩展名
   align: "center"               # start | center | end；center：首个正窗口仅写半窗（后半），减少起点偏移
@@ -118,7 +118,8 @@ segmentation:
   codes_min_overlap_ratio: 0.25 # 窗口与片段的最小重叠比例阈值（重叠帧数/T）；低于此比例的窗口不参与 codes 拼接
   skip_if_exists: true
   allow_overlap: true          # 新增：当为 true 时，导出 codes 不再去重叠；保存所有满足重叠比例阈值的候选窗口
-
+  export_segments_json: true
+  segments_json_suffix: "_segments"
 # 导出配置（可选）
 export:
   prequant: false              # 是否导出未量化 latent (to_quantize)

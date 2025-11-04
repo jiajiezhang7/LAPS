@@ -75,8 +75,8 @@ energy:
   visualize: false              # 是否开启实时能量曲线窗口
   window_title: "Energy Curve"
   viz_window: 400              # 曲线缓存长度（窗口个数）
-  plot_width: 720              # 曲线窗口宽度（近似正方形）
-  plot_height: 520             # 曲线窗口高度（近似正方形）
+  plot_width: 720              # 曲线窗口宽度（像素）
+  plot_height: 200             # 曲线窗口高度（像素；调整此值可改变图片高度）
   y_min: null                  # 纵轴下限（根据你的观测可调整；设 null 则自适应）
   y_max: null                  # 纵轴上限（根据你的观测可调整；设 null 则自适应）
   plot_color: [0, 255, 0]      # BGR 颜色
@@ -89,7 +89,7 @@ energy:
   smoothing:
     enable: true            # 是否启用平滑（默认关闭，不改变当前行为）
     method: "ema"            # ema | ma （推荐在线用 ema）
-    alpha: 0.7               # EMA 系数（0~1，越大越贴近当前值）
+    alpha: 0.2               # EMA 系数（0~1，越大越贴近当前值；越小越平滑）
     window: 3                # MA 窗口大小（仅当 method=ma 时使用）
     use_for_seg: true        # 是否用“平滑后的 E”进行阈值分割
     visualize_both: true     # 能量窗口叠加显示原始+平滑两条曲线

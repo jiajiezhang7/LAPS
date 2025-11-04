@@ -9,10 +9,10 @@
 - 使用现有绘图函数：draw_energy_plot_enhanced / draw_energy_plot_enhanced_dual
 
 用法示例：
-  python -m video_action_segmenter.scripts.plot_energy_segment_from_jsonl \
+  python -m video_action_segmenter.scripts.plot_energy_segment_from_jsonl_for_paperteaser \
     --jsonl /media/johnny/48FF-AA60/online_inference_output/epochs5_complete500_d02_m10_cb2048_stride4_vector/D02_20250812031659/d02_stream_energy_quantized_token_diff_l2_mean.jsonl \
     --params ./video_action_segmenter/params_d02.yaml \
-    --segment-length 50 \
+    --segment-length 100 \
     --seed 100
 
 建议在 conda 环境 amplify_mt 中运行：
@@ -129,6 +129,16 @@ def main():
     parser.add_argument("--output", type=str, default="", help="输出图片路径（默认保存在 JSONL 同目录）")
     parser.add_argument("--title", type=str, default="", help="图标题（留空则自动生成）")
     parser.add_argument("--start-index", type=int, default=-1, help="可选：指定片段起始的数组下标（调试用）")
+    parser.add_argument("--viz-style", type=str, default="enhanced", help="可视化风格")
+    parser.add_argument("--theme", type=str, default="academic_blue", help="主题风格")
+    parser.add_argument("--plot-width", type=int, default=800, help="图片宽度")
+    parser.add_argument("--plot-height", type=int, default=240, help="图片高度")
+    parser.add_argument("--smoothing-enable", type=bool, default=True, help="是否启用平滑")
+    parser.add_argument("--smoothing-method", type=str, default="ema", help="平滑方法")
+    parser.add_argument("--smoothing-alpha", type=float, default=0.4, help="平滑参数 alpha")
+    parser.add_argument("--smoothing-window", type=int, default=3, help="平滑窗口大小")
+    parser.add_argument("--y-min", type=float, default=None, help="Y轴最小值")
+    parser.add_argument("--y-max", type=float, default=None, help="Y轴最大值")
 
     args = parser.parse_args()
 
@@ -179,34 +189,8 @@ def main():
         smoothing_window = 3
     smoothing_visualize_both = bool(smoothing_cfg.get("visualize_both", True))
 
-    # 阈值线配置（动作启动/结束阈值）
+    # 阈值线配置（论文 teaser 风格：禁用阈值线显示）
     threshold_lines = []
-    try:
-        thr_on = float(seg_cfg.get("threshold", float("nan")))
-    except Exception:
-        thr_on = float("nan")
-    try:
-        hysteresis_ratio = float(seg_cfg.get("hysteresis_ratio", float("nan")))
-    except Exception:
-        hysteresis_ratio = float("nan")
-    if np.isfinite(thr_on):
-        threshold_lines.append({
-            "value": thr_on,
-            "label": "Thr_on",
-            "color": (40, 220, 255),  # 浅黄（BGR）
-            "thickness": 2,
-            "style": "dashed",
-        })
-        if np.isfinite(hysteresis_ratio):
-            thr_off = thr_on * hysteresis_ratio
-            if np.isfinite(thr_off):
-                threshold_lines.append({
-                    "value": thr_off,
-                    "label": "Thr_off",
-                    "color": (40, 220, 255),
-                    "thickness": 2,
-                    "style": "dashed",
-                })
 
     # 选择随机连续片段
     if args.start_index is not None and args.start_index >= 0:
@@ -225,48 +209,27 @@ def main():
     seg_raw = energies_np[start_idx:end_idx]
     seg_smooth = smooth_np[start_idx:end_idx] if smoothing_enable and smooth_np is not None else None
 
-    # 构造标题
-    if args.title:
-        title = args.title
-    else:
-        window_start = windows[start_idx] if start_idx < len(windows) else start_idx
-        window_end = windows[end_idx - 1] if end_idx - 1 < len(windows) else end_idx - 1
-        total_windows = end_idx - start_idx
-        title = f"Energy Curve, window={window_start}-{window_end}, totally {total_windows}"
+    # 构造标题（论文 teaser 风格：禁用标题显示）
+    title = ""
 
-    # 绘图（增强风格）
+    # 绘图（增强风格，论文 teaser 风格：仅显示平滑曲线，无边框）
     if viz_style in ("enhanced", "paper", "academic"):
-        if smoothing_enable and smoothing_visualize_both and seg_smooth is not None:
-            img = draw_energy_plot_enhanced_dual(
-                raw_values=seg_raw.tolist(),
-                smooth_values=seg_smooth.tolist(),
-                width=width,
-                height=height,
-                y_min=y_min,
-                y_max=y_max,
-                theme=theme,
-                show_grid=True,
-                show_labels=True,
-                show_legend=True,
-                show_statistics=True,
-                title=title,
-                threshold_lines=threshold_lines,
-            )
-        else:
-            values_to_draw = seg_smooth if (smoothing_enable and seg_smooth is not None) else seg_raw
-            img = draw_energy_plot_enhanced(
-                values=values_to_draw.tolist(),
-                width=width,
-                height=height,
-                y_min=y_min,
-                y_max=y_max,
-                theme=theme,
-                show_grid=True,
-                show_labels=True,
-                show_statistics=True,
-                title=title,
-                threshold_lines=threshold_lines,
-            )
+        # 论文 teaser 风格：仅显示平滑后的曲线
+        values_to_draw = seg_smooth if (smoothing_enable and seg_smooth is not None) else seg_raw
+        img = draw_energy_plot_enhanced(
+            values=values_to_draw.tolist(),
+            width=width,
+            height=height,
+            y_min=y_min,
+            y_max=y_max,
+            theme=theme,
+            show_grid=False,
+            show_labels=False,
+            show_statistics=False,
+            show_border=False,
+            title=title,
+            threshold_lines=threshold_lines,
+        )
     else:
         # 退化到基础样式（本脚本主打增强样式，基础样式仅作为兜底）
         from video_action_segmenter.stream_utils import draw_energy_plot

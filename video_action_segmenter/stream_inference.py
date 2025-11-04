@@ -13,6 +13,8 @@ import threading
 import sys
 import subprocess
 from queue import Queue, Empty
+import logging
+from datetime import datetime, timezone
 
 from omegaconf import OmegaConf
 import yaml
@@ -280,6 +282,9 @@ def run_streaming(args):
     seg_min_codes_windows = int(seg_cfg.get("min_codes_windows", 2))
     # 未开启分割时无需缓存大量窗口；开启时保留小历史窗口用于触发稳定判定
     seg_history_keep = max(4, int(seg_up_count) + int(seg_cooldown_windows) + 1)
+    # 片段元数据导出配置
+    seg_export_segments_json = bool(seg_cfg.get("export_segments_json", True))
+    seg_segments_json_suffix = str(seg_cfg.get("segments_json_suffix", "_segments"))
 
     # 可选：显存调试与碎片缓解（默认关闭）
     debug_mem_cfg = cfg.get("debug_memory", {}) if isinstance(cfg.get("debug_memory", {}), dict) else {}
@@ -363,6 +368,24 @@ def run_streaming(args):
     print(f"[Stream] device={device}, target_fps={target_fps}, T={T}, stride={stride}, resize_shorter={resize_shorter}, grid_size={grid_size}, max_windows={max_windows if max_windows is not None else 'unlimited'}")
     print(f"[Budget] per-window budget = {budget_per_window:.3f}s (stride={stride}, target_fps={target_fps})")
     print(f"[Video] Processing video: {video_name} (type: {src_type})")
+
+    # 原视频信息与元数据时间基
+    try:
+        orig_fps = float(cap.get(cv2.CAP_PROP_FPS)) if cap is not None else 0.0
+    except Exception:
+        orig_fps = 0.0
+    try:
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) if cap is not None else 0
+    except Exception:
+        total_frames = 0
+    meta_timebase_fps = float(target_fps)
+    # 输入视频完整文件名（含扩展名，仅 file 模式可靠）
+    try:
+        _path_env = os.environ.get("MT_OVERRIDE_INPUT_PATH", "").strip()
+        _path_cfg = str(cfg.get("input", {}).get("path", "")).strip()
+        input_video_filename = Path(_path_env or _path_cfg).name if src_type == "file" else str(video_name)
+    except Exception:
+        input_video_filename = str(video_name)
 
     # 初始化可视化窗口
     window_ok = False
@@ -450,6 +473,57 @@ def run_streaming(args):
         seg_max_duration_windows = int(max(1, round(float(seg_max_duration_seconds) * windows_per_second))) if seg_max_duration_seconds and seg_max_duration_seconds > 0 else 0
     if seg_enable:
         seg_videos_dir, seg_codes_dir = ensure_output_dirs(seg_output_dir, video_name)
+    # 片段元数据收集
+    segments_records: List[dict] = []
+    # 增量写入函数
+    def _write_segments_json_incremental():
+        if not seg_export_segments_json:
+            return
+        try:
+            segments_dir_local = seg_videos_dir
+        except Exception:
+            segments_dir_local = None
+        if segments_dir_local is None:
+            return
+        try:
+            segments_dir_local.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+        meta_obj = {
+            "video": str(input_video_filename),
+            "segments": segments_records,
+            "video_duration_sec": (float(total_frames) / float(orig_fps) if (orig_fps and orig_fps > 0 and total_frames > 0) else None),
+            "fps": float(orig_fps) if orig_fps else None,
+            "processed_at": datetime.now(timezone.utc).isoformat(),
+            "segmentation_params": {
+                "threshold": float(seg_threshold),
+                "mode": str(seg_mode),
+                "hysteresis_ratio": float(seg_hysteresis_ratio),
+                "up_count": int(seg_up_count),
+                "down_count": int(seg_down_count),
+                "cooldown_windows": int(seg_cooldown_windows),
+                "min_len_windows": int(seg_min_len_windows),
+                "stride": int(stride),
+                "target_fps": int(target_fps),
+                "orig_fps": float(orig_fps) if orig_fps else None,
+            },
+        }
+        out_path = segments_dir_local / f"{video_name}{seg_segments_json_suffix}.json"
+        try:
+            tmp_path = out_path.with_suffix(out_path.suffix + ".tmp")
+        except Exception:
+            tmp_path = None
+        try:
+            if tmp_path:
+                with open(tmp_path, "w", encoding="utf-8") as f:
+                    json.dump(meta_obj, f, ensure_ascii=False, indent=2)
+                os.replace(tmp_path, out_path)
+            else:
+                with open(out_path, "w", encoding="utf-8") as f:
+                    json.dump(meta_obj, f, ensure_ascii=False, indent=2)
+            print(f"[SegMeta] Written: {out_path}")
+        except Exception as e:
+            logging.warning(f"[SegMeta][WARN] 写入失败: {e}")
 
     frames_emitted = 0  # 重采样后累计的帧数
     windows_done = 0     # 已完成的窗口（结果已收到）
@@ -756,6 +830,23 @@ def run_streaming(args):
                                             allow_overlap=seg_allow_overlap,
                                             min_codes_windows=seg_min_codes_windows,
                                         )
+                                    # 记录片段元数据（仅保存成功的片段）
+                                    try:
+                                        if seg_export_segments_json and seg_current_path is not None and os.path.isfile(seg_current_path):
+                                            n_frames = max(0, int(seg_end_frame) - int(seg_start_frame) + 1)
+                                            start_sec = float(int(seg_start_frame)) / float(meta_timebase_fps) if meta_timebase_fps > 0 else 0.0
+                                            end_sec = start_sec + (float(n_frames) / float(meta_timebase_fps) if meta_timebase_fps > 0 else 0.0)
+                                            segments_records.append({
+                                                "start_sec": float(start_sec),
+                                                "end_sec": float(end_sec),
+                                                "label": f"segment_{max(0, seg_segment_count-1)}",
+                                            })
+                                            try:
+                                                _write_segments_json_incremental()
+                                            except Exception:
+                                                pass
+                                    except Exception:
+                                        pass
                                 except Exception as e:
                                     print(f"[Seg][WARN] export codes failed: {e}")
                             seg_active = False
@@ -808,6 +899,23 @@ def run_streaming(args):
                                                     allow_overlap=seg_allow_overlap,
                                                     min_codes_windows=seg_min_codes_windows,
                                                 )
+                                            # 记录片段元数据（仅保存成功的片段）
+                                            try:
+                                                if seg_export_segments_json and seg_current_path is not None and os.path.isfile(seg_current_path):
+                                                    n_frames = max(0, int(seg_end_frame) - int(seg_start_frame) + 1)
+                                                    start_sec = float(int(seg_start_frame)) / float(meta_timebase_fps) if meta_timebase_fps > 0 else 0.0
+                                                    end_sec = start_sec + (float(n_frames) / float(meta_timebase_fps) if meta_timebase_fps > 0 else 0.0)
+                                                    segments_records.append({
+                                                        "start_sec": float(start_sec),
+                                                        "end_sec": float(end_sec),
+                                                        "label": f"segment_{max(0, seg_segment_count-1)}",
+                                                    })
+                                                    try:
+                                                        _write_segments_json_incremental()
+                                                    except Exception:
+                                                        pass
+                                            except Exception:
+                                                pass
                                         except Exception as e:
                                             print(f"[Seg][WARN] export codes failed: {e}")
                                 except Exception:
@@ -970,8 +1078,65 @@ def run_streaming(args):
                             )
                         else:
                             print(f"[Seg] END on exit len_windows={seg_written_windows} path={seg_current_path}")
+                            # on-exit 情况下补充记录片段元数据（仅保存成功的片段）
+                            try:
+                                if seg_export_segments_json and seg_current_path is not None and os.path.isfile(seg_current_path):
+                                    n_frames = max(0, int(seg_end_frame) - int(seg_start_frame) + 1)
+                                    start_sec = float(int(seg_start_frame)) / float(meta_timebase_fps) if meta_timebase_fps > 0 else 0.0
+                                    end_sec = start_sec + (float(n_frames) / float(meta_timebase_fps) if meta_timebase_fps > 0 else 0.0)
+                                    segments_records.append({
+                                        "start_sec": float(start_sec),
+                                        "end_sec": float(end_sec),
+                                        "label": f"segment_{max(0, seg_segment_count-1)}",
+                                    })
+                                    try:
+                                        _write_segments_json_incremental()
+                                    except Exception:
+                                        pass
+                            except Exception:
+                                pass
                 except Exception:
                     pass
+        except Exception:
+            pass
+        # 写出每视频 JSON 元数据文件
+        try:
+            if 'seg_enable' in locals() and seg_enable and seg_export_segments_json:
+                try:
+                    segments_dir = seg_videos_dir if 'seg_videos_dir' in locals() else None
+                except Exception:
+                    segments_dir = None
+                if segments_dir is not None:
+                    try:
+                        segments_dir.mkdir(parents=True, exist_ok=True)
+                    except Exception:
+                        pass
+                    meta_obj = {
+                        "video": str(input_video_filename),
+                        "segments": segments_records,
+                        "video_duration_sec": (float(total_frames) / float(orig_fps) if (orig_fps and orig_fps > 0 and total_frames > 0) else None),
+                        "fps": float(orig_fps) if orig_fps else None,
+                        "processed_at": datetime.now(timezone.utc).isoformat(),
+                        "segmentation_params": {
+                            "threshold": float(seg_threshold),
+                            "mode": str(seg_mode),
+                            "hysteresis_ratio": float(seg_hysteresis_ratio),
+                            "up_count": int(seg_up_count),
+                            "down_count": int(seg_down_count),
+                            "cooldown_windows": int(seg_cooldown_windows),
+                            "min_len_windows": int(seg_min_len_windows),
+                            "stride": int(stride),
+                            "target_fps": int(target_fps),
+                            "orig_fps": float(orig_fps) if orig_fps else None,
+                        },
+                    }
+                    out_path = segments_dir / f"{video_name}{seg_segments_json_suffix}.json"
+                    try:
+                        with open(out_path, "w", encoding="utf-8") as f:
+                            json.dump(meta_obj, f, ensure_ascii=False, indent=2)
+                        print(f"[SegMeta] Written: {out_path}")
+                    except Exception as e:
+                        logging.warning(f"[SegMeta][WARN] 写入失败: {e}")
         except Exception:
             pass
         try:

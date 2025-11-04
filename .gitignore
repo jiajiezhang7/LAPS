@@ -32,3 +32,5 @@ umap_vis/figure/
 umap_vis/statistics/
 umap_vis/classify_res/
 datasets/
+video_action_segmenter/figures/
+stream_infer_results/

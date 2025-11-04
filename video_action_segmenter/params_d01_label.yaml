@@ -118,7 +118,8 @@ segmentation:
   min_codes_windows: 2          # codes 窗口数过滤阈值：少于等于此数量的片段视为噪声，不保存（删除视频和 codes.json）
   skip_if_exists: true
   allow_overlap: true          # 新增：当为 true 时，导出 codes 不再去重叠；保存所有满足重叠比例阈值的候选窗口
-
+  export_segments_json: true
+  segments_json_suffix: "_segments"
 # 导出配置（可选）
 export:
   prequant: false              # 是否导出未量化 latent (to_quantize)
