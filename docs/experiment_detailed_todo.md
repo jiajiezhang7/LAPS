@@ -18,6 +18,12 @@
   - tables/{table1,table2,table3,table4}
   - figures/{figure3,figure5,...}
 
+- 存储迁移与符号链接（重要）：
+  - /home/johnny/action_ws/datasets/output → 符号链接 → /media/johnny/48FF-AA60/output
+  - /home/johnny/action_ws/comapred_algorithm/OTAS/data → 符号链接 → /media/johnny/48FF-AA60/OTAS/data
+  - /home/johnny/action_ws/comapred_algorithm/ABD/i3d_features → 符号链接 → /media/johnny/48FF-AA60/ABD/i3d_features
+  - 说明：文档与脚本中的路径仍以 /home/johnny/action_ws/... 为准（符号链接透明生效）。若需直接访问外部盘，请替换为右侧实际路径。
+
 说明：为避免反复改 YAML，建议为不同视角与能量源复制参数文件（最小侵入，仅改少量字段）：
 - video_action_segmenter/params_d01_quant.yaml
 - video_action_segmenter/params_d01_vel.yaml
@@ -203,6 +209,43 @@
   - 使用相同 eval_segmentation.py 评估，生成对照表（tables/table1.csv）
 
 
+
+### ABD 基线（Q2）
+目标：复现 ABD（CVPR'22，无训练）离线算法，直接读取 D01/D02 原始视频，产出与 LAPS 兼容的分割结果，用同一评估脚本比较。
+
+数据与接口约定：
+- 输入：/home/johnny/action_ws/datasets/gt_raw_videos/{D01,D02} 下各视频（与 LAPS 完全一致）
+- 特征：默认从 LAPS 流式前向导出“每窗 latent 向量”（prequant/quantized，经 token 维度聚合为 1×D），作为 ABD 的帧序列特征；无需额外训练
+- 窗口到时间映射：sec ≈ window_idx * stride / target_fps（默认 stride=4, target_fps=10）
+- 输出：/home/johnny/action_ws/datasets/output/segmentation_outputs/{VIEW}_ABD/{video_stem}/
+  - segments 元数据：{video_stem}_segments.json（字段兼容 LAPS：video、segments[{start_sec,end_sec}], fps, processed_at）
+  - 可选：segmented_videos/*.mp4（若启用导出）
+  - 可选：stream_energy_{source}_{mode}.jsonl（沿用 LAPS 的 JSONL 字段 window/energy/source/mode）
+
+运行（待实现完成后）：
+- D01：
+  conda run -n laps python -m comapred_algorithm.ABD.run_abd \
+    --view D01 \
+    --input-dir /home/johnny/action_ws/datasets/gt_raw_videos/D01 \
+    --output-dir /home/johnny/action_ws/datasets/output/segmentation_outputs/D01_ABD \
+    --feature-source quantized --alpha 0.5 --k auto --stride 4 --target-fps 10
+- D02：
+  conda run -n laps python -m comapred_algorithm.ABD.run_abd \
+    --view D02 \
+    --input-dir /home/johnny/action_ws/datasets/gt_raw_videos/D02 \
+    --output-dir /home/johnny/action_ws/datasets/output/segmentation_outputs/D02_ABD \
+    --feature-source quantized --alpha 0.5 --k auto --stride 4 --target-fps 10
+
+评估：与 LAPS/OTAS 使用相同脚本
+  conda run -n laps python tools/eval_segmentation.py \
+    --pred-root /home/johnny/action_ws/datasets/output/segmentation_outputs/{VIEW}_ABD \
+    --gt-dir /home/johnny/action_ws/datasets/gt_annotations/{VIEW} \
+    --iou-thrs 0.5 0.75 --tolerance-sec 2.0 \
+    --output /home/johnny/action_ws/datasets/output/stats/seg_eval/seg_eval_{VIEW}_ABD.json
+
+环境：
+- 推荐复用 laps 环境（ABD 仅依赖 numpy/scipy）；如后续引入额外特征提取器，可新建 abd_env（此处仅文档记录，暂不创建）
+
 ### Optical Flow Baseline（Q2）
 待办：
 - [ ] 实现 optical_flow vs GT 的阈值搜索与视角级聚合脚本。
@@ -362,8 +405,23 @@ Optical Flow Baseline（Q2）待办：
 - 当前状态：阶段2 已完成（D01/D02 quantized 在线分割完成：各 6/6）；阶段1（quantized/velocity）已完成；阶段1-OpticalFlow 待实现；阶段3（Q2 评估）部分待做（LAPS 评估 / Optical Flow baseline / OTAS）
 - 已完成里程碑：
   - 输入/输出路径更新并同步至文档；输入目录 D01/D02 确认；checkpoint 路径确认；GPU/并行策略确认；YAML 生成与输出目录写权限验证
+- OTAS 进展（在 otas 环境执行）：
+  - [x] 新建 conda 环境 otas 并安装依赖（torch/torchvision/opencv/numpy/scipy/pandas/tqdm/Pillow）
+  - [x] 按 OTAS 目录约定建立/链接视频：data/breakfast/videos/{D01,D02}/{D01,D02}/*.mp4
+  - [x] D01 全量抽帧至 data/breakfast/frames/{P}_{cam}_{act}/Frame_%06d.jpg（已验证样例目录存在且帧数正常）
+  - [x] 生成/更新 data/breakfast/video_info.pkl（当前包含 D01 条目；D02 将在其抽帧后合并）
+  - [x] 通过 make_video_info_from_frames.py 从帧目录重建（D01 共 6 条目），输出：comapred_algorithm/OTAS/data/breakfast/video_info.pkl
+
+  - [ ] 运行 OTAS 验证推理（TF）：进行中（D01）；输出将写入 /home/johnny/action_ws/datasets/output/otas_out/OTAS/BF_tf/mean_error/*.pkl（通过符号链接落到外部盘）
+  - [x] 数据装载与切窗已完成（window_lists 已生成：/home/johnny/action_ws/datasets/output/otas_out/OTAS/BF_tf/window_lists/*）
+
+  - [ ] 边界检测 detect_bdy.py（待上一阶段完成后运行），输出 detect_seg/*.pkl（同目录根：/home/johnny/action_ws/datasets/output/otas_out/...）
+  - [ ] 结果适配与评估（laps 环境）：将 OTAS pkl→segments.json 并评估 F1@2s、mAP@IoU
+  - [!] 2025-11-05 重启恢复：已检查可能的中断风险，清理 window_lists/mean_error/detect_seg 后重新启动 OTAS 推理（laps 环境；--batch_size 64, --num_workers 16, --gpu 0）。预计 10–30 分钟完成，完成后将继续 detect_bdy 与结果适配/评估。
+
 - 问题与解决：
-  - 暂无
+  - [x] 本地备份目录已由用户手动强制清理（datasets/output.backup_*、OTAS/data.backup_*、ABD/i3d_features.backup_*）
+  - [x] 输出路径统一为 /home/johnny/action_ws/datasets/output/otas_out（通过符号链接落到外部盘），现有脚本无需改动
 - 下一步行动：
 - 流程约束：阶段1第一轮仅能量不分割（segmentation.enable=false），阶段2读取阶段1阈值执行分割（quantized 源使用 mode=report）
 

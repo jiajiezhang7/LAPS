@@ -49,3 +49,49 @@ The method is causal and single-pass. Per window, the dominant cost arises from 
 - Export policy: overlap ratio ρ over [t_s, t_e) to select full windows; enforce min_save_windows and min_codes_windows; export both codes_windows and quantized_windows for each segment.
 - Optional artifacts: per-window prequant tensors (for analysis), energy JSONL for diagnostics, and per-segment video files.
 
+
+## Formal Mathematical Description (Supplement)
+
+- **1. Windowing and motion representation**
+  - Let x(t) be sampled at target_fps. Define windows indexed by t = 0,1,2,..., each covering T frames and advanced by stride k frames.
+  - Within window t, dense grid trajectories yield normalized per-point velocities V_t ∈ R^{(T−1)×N×2}. Normalization uses a fixed decoder window size W_dec to achieve scale invariance across temporal resolutions.
+  - Notation: V_t[τ,n] ∈ R^2 is the velocity at intra-window time τ ∈ {1,…,T−1} for track n ∈ {1,…,N}.
+
+- **2. Latent tokenization**
+  - An encoder produces Z_pre,t = Enc(V_t) ∈ R^{L×D}. A quantizer maps each time step to the nearest codebook prototype e_k from E = {e_1,…,e_K}, yielding Z_q,t with codes c_i:
+    Z_q,t[i] = e_{c_i},  where  c_i = argmin_k ||Z_pre,t[i] − e_k||_2.
+  - By default, energy is computed on Z_q,t (quantized).
+
+- **3. Per-window energy definitions** (let Z denote Z_pre,t or Z_q,t according to energy.source):
+  - l2_mean:
+    E_t = (1/L) Σ_{i=1}^L ||Z[i]||_2.
+  - token_diff_l2_mean (default with quantized):
+    E_t = (1/(L−1)) Σ_{i=2}^L ||Z[i] − Z[i−1]||_2.
+  - Velocity alternative (source = velocity):
+    E_t = (1/((T−1)N)) Σ_{τ=1}^{T−1} Σ_{n=1}^N ||V_t[τ,n]||_2.
+
+- **4. Causal smoothing (no future leakage, optional)**
+  - Exponential moving average (EMA):
+    Ê_t = α·E_t + (1−α)·Ê_{t−1},  with Ê_0 = E_0 and α ∈ (0,1).
+  - Causal moving average (window w):
+    Ê_t = (1/m_t) Σ_{j=max(0,t−w+1)}^{t} E_j,  where m_t = t − max(0,t−w+1) + 1.
+  - If enabled for decisions, use E*_t := Ê_t; otherwise E*_t := E_t.
+
+- **5. Online segmentation with hysteresis and debouncing**
+  - State s_t ∈ {0,1} denotes OFF(0)/ON(1). Cooldown counter cd_t ∈ Z_≥0 prevents immediate re-trigger after an END. Let u,d ∈ Z_≥1 be up/down debouncing lengths. Let θ_on > 0 be the start threshold and θ_off = r·θ_on with r ∈ (0,1] be the release threshold (hysteresis).
+  - Run-length counters:
+    pos_t = 1 + pos_{t−1} if E*_t ≥ θ_on, else 0;  neg_t = 1 + neg_{t−1} if E*_t < θ_off, else 0; with pos_{−1} = neg_{−1} = 0.
+  - Transitions:
+    - If s_{t−1} = 0 (OFF): cd_t := max(0, cd_{t−1} − 1). If cd_t = 0 and pos_t ≥ u ⇒ START: s_t := 1; reset pos_t := 0, neg_t := 0.
+    - If s_{t−1} = 1 (ON): If neg_t ≥ d ⇒ END: s_t := 0; set cd_t := c (cooldown windows); reset pos_t := 0, neg_t := 0. Otherwise s_t := 1.
+  - Optional maximum duration: If current ON run length reaches D_max windows, force END as above.
+  - Boundary alignment a ∈ {start, center, end} selects which subrange of the first window is written; subsequent windows append only the last k frames to avoid duplication.
+
+- **6. Threshold selection (offline)**
+  - From recorded curves {E_t} (or {Ê_t}), sweep θ_on on a development set to optimize a criterion (e.g., F1 or Youden’s J). Deploy θ_on together with r,u,d,c tuned for stability and latency. θ_off is set as r·θ_on.
+
+- **7. Not peak detection**
+  - The detector is not a peak finder. It triggers on sustained threshold crossings with hysteresis and debouncing. Transient spikes that do not satisfy pos_t ≥ u do not START; brief dips that do not satisfy neg_t ≥ d do not END.
+
+- **8. Latency bound**
+  - Decision latency is bounded by k/target_fps plus any smoothing horizon, supporting causal real-time operation.

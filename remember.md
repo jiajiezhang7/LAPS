@@ -31,3 +31,8 @@
 - online inference output
 
     /media/johnny/48FF-AA60/online_inference_output/cb2048_stride4
+    /media/johnny/48FF-AA60/OTAS/data
+
+    /media/johnny/48FF-AA60/output
+
+    /media/johnny/48FF-AA60/ABD
