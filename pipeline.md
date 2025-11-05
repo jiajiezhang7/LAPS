@@ -101,7 +101,7 @@
 
     ```bash
     python -m video_action_segmenter.stream_inference \
-      --params video_action_segmenter/params_d02.yaml
+      --params video_action_segmenter/params_d02_label.yaml
   ```
 
 ##### Action Energy Analysis （运动能量分析，探究指标优劣 - best: quantized + token_diff_l2_mean）
