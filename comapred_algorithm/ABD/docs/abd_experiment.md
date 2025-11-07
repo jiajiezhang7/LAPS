@@ -30,7 +30,8 @@
 - D01/D02 原始视频：/home/johnny/action_ws/datasets/gt_raw_videos/{D01,D02}
 
 **特征：**
-- 使用 I3D 特征（通过 abd_env 批量提取）
+- 默认使用 HOF（Histogram of Optical Flow）片段级特征（CPU 提取，OpenCV），输出矩阵 X∈R^{N×D}
+- I3D 特征作为可选方案（GPU 资源充足时）
 - 不再使用 LAPS latent（prequant/quantized）
 
 **时间映射：**
@@ -52,8 +53,8 @@
 conda run -n laps python -m comapred_algorithm.ABD.run_abd \
   --view D01 \
   --input-dir /home/johnny/action_ws/datasets/gt_raw_videos/D01 \
-  --output-dir /home/johnny/action_ws/datasets/output/segmentation_outputs/D01_ABD \
-  --features-dir /home/johnny/action_ws/comapred_algorithm/ABD/i3d_features/D01 \
+  --output-dir /home/johnny/action_ws/datasets/output/segmentation_outputs/D01_ABD_HOF \
+  --features-dir /home/johnny/action_ws/comapred_algorithm/ABD/hof_features/D01 \
   --feature-source i3d --alpha 0.5 --k auto --target-fps 30 --clip-duration 2.0 --clip-stride 0.4
 ```
 
@@ -62,8 +63,8 @@ conda run -n laps python -m comapred_algorithm.ABD.run_abd \
 conda run -n laps python -m comapred_algorithm.ABD.run_abd \
   --view D02 \
   --input-dir /home/johnny/action_ws/datasets/gt_raw_videos/D02 \
-  --output-dir /home/johnny/action_ws/datasets/output/segmentation_outputs/D02_ABD \
-  --features-dir /home/johnny/action_ws/comapred_algorithm/ABD/i3d_features/D02 \
+  --output-dir /home/johnny/action_ws/datasets/output/segmentation_outputs/D02_ABD_HOF \
+  --features-dir /home/johnny/action_ws/comapred_algorithm/ABD/hof_features/D02 \
   --feature-source i3d --alpha 0.5 --k auto --target-fps 30 --clip-duration 2.0 --clip-stride 0.4
 ```
 
@@ -74,7 +75,7 @@ conda run -n laps python -m comapred_algorithm.ABD.run_abd \
 #### D01 评估
 ```bash
 conda run -n laps python tools/eval_segmentation.py \
-  --pred-root /home/johnny/action_ws/datasets/output/segmentation_outputs/D01_ABD \
+  --pred-root /home/johnny/action_ws/datasets/output/segmentation_outputs/D01_ABD_HOF \
   --gt-dir /home/johnny/action_ws/datasets/gt_annotations/D01 \
   --iou-thrs 0.5 0.75 --tolerance-sec 2.0 --tolerance-secs 5.0 \
   --output /home/johnny/action_ws/datasets/output/stats/seg_eval/seg_eval_D01_ABD.json
@@ -83,7 +84,7 @@ conda run -n laps python tools/eval_segmentation.py \
 #### D02 评估
 ```bash
 conda run -n laps python tools/eval_segmentation.py \
-  --pred-root /home/johnny/action_ws/datasets/output/segmentation_outputs/D02_ABD \
+  --pred-root /home/johnny/action_ws/datasets/output/segmentation_outputs/D02_ABD_HOF \
   --gt-dir /home/johnny/action_ws/datasets/gt_annotations/D02 \
   --iou-thrs 0.5 0.75 --tolerance-sec 2.0 --tolerance-secs 5.0 \
   --output /home/johnny/action_ws/datasets/output/stats/seg_eval/seg_eval_D02_ABD.json
@@ -92,7 +93,11 @@ conda run -n laps python tools/eval_segmentation.py \
 ### 环境
 
 - 推荐复用 laps 环境（ABD 仅依赖 numpy/scipy）
-- 如后续引入额外特征提取器，可新建 abd_env（此处仅文档记录，暂不创建）
+- 提取 HOF 需要 OpenCV（CPU）与 tqdm（可选进度条）：
+  ```bash
+  conda run -n laps python -c "import cv2; print(cv2.__version__)" \
+    || conda run -n laps pip install opencv-python tqdm
+  ```
 
 ---
 
@@ -107,23 +112,24 @@ conda run -n laps python tools/eval_segmentation.py \
 ## 详细 ToDoList
 
 ### ABD 实验任务
-- [ ] 验证 I3D 特征目录存在：/home/johnny/action_ws/comapred_algorithm/ABD/i3d_features/{D01,D02}
-- [ ] 运行 D01 ABD 分割
-- [ ] 运行 D02 ABD 分割
-- [ ] 评估 D01 ABD 结果
-- [ ] 评估 D02 ABD 结果
+- [ ] 生成 HOF 特征目录：/home/johnny/action_ws/comapred_algorithm/ABD/hof_features/{D01,D02}
+- [ ] 运行 D01 ABD 分割（使用 HOF）：输出到 D01_ABD_HOF
+- [ ] 运行 D02 ABD 分割（使用 HOF）：输出到 D02_ABD_HOF
+- [ ] 评估 D01 ABD（HOF）结果
+- [ ] 评估 D02 ABD（HOF）结果
 - [ ] 生成对比表格 (Table 1)
+- [ ] （可选）最小代码修改：`run_abd.py` 支持 `--feature-source hof` 并将 `meta_params["source"]` 写入对应值（仅影响元数据）
 
 ---
 
 ## 进度追踪
 
-- 当前状态：待启动
+- 当前状态：切换至 HOF 特征方案，准备提取
 - 依赖项：
-  - [x] I3D 特征提取完成（符号链接已配置）
+  - [ ] HOF 特征提取完成（/comapred_algorithm/ABD/hof_features/{D01,D02}）
   - [x] GT 标注已准备
   - [x] 评估脚本已准备（tools/eval_segmentation.py）
-  - [ ] ABD 分割运行
+  - [ ] ABD 分割运行（D01_ABD_HOF / D02_ABD_HOF）
   - [ ] 评估与对比
 
 ---
@@ -152,3 +158,4 @@ conda run -n laps python tools/eval_segmentation.py \
 
 - ABD: Action Boundary Detection with Deep Boundary-Aware Features (CVPR'22)
 - 与 LAPS、Optical Flow Baseline、OTAS 进行无监督动作分割性能对比
+

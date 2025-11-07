@@ -14,24 +14,48 @@ Key advantages: No training stage, low-latency inference, and state-of-the-art p
 
 This reproduction assumes you have pre-extracted frame-wise features (e.g., Fisher Vectors of IDT or I3D features). The algorithm operates on these features.
 
+Update (2025-11): Due to limited GPU resources, we will replace I3D with clip-wise HOF (Histogram of Optical Flow) features computed on CPU via OpenCV. HOF produces a temporal feature matrix X ∈ R^{N×D} fully compatible with ABD.
+
 ## Prerequisites
 - **Programming Language**: Python (using libraries like NumPy for vector operations, SciPy for cosine similarity if needed).
 - **Libraries**:
   - NumPy: For array operations, averaging, and cosine similarity.
   - SciPy (optional): For efficient cosine distance computation.
+  - OpenCV (opencv-python): For HOF feature extraction on CPU.
+  - tqdm (optional): For progress visualization during extraction.
+  - Install/check in the laps environment:
+    ```bash
+    conda run -n laps python -c "import cv2; print(cv2.__version__)" \
+      || conda run -n laps pip install opencv-python tqdm
+    ```
 - **Input Data**:
-  - Frame features: A NumPy array `X` of shape (N, D), where N is the number of frames, D is the feature dimension.
+  - Frame/clip-wise features: A NumPy array `X` of shape (N, D), where N is the number of frames/clips, D is the feature dimension.
   - K: Number of action classes (prior knowledge; use average per dataset, e.g., 5 for Breakfast).
 - **No Internet or Additional Installs**: All operations are local.
 
 ## Inputs
-- `X`: NumPy array of shape (N, D) – Frame-wise features.
+- `X`: NumPy array of shape (N, D) – Frame/clip-wise features.
 - `K`: Integer – Number of action classes (e.g., average number of action classes per video in the dataset).
 - `alpha`: Float – Hyperparameter for filter and window sizes (default: 0.4 or 0.6 based on experiments; tune between 0.2-0.8).
 
 ## Outputs
 - `partition`: List or array of frame-wise action labels (integers from 0 to K-1).
 - `boundaries`: List of detected boundary indices (frame indices where actions change).
+
+## Feature Choice Update: HOF (CPU)
+
+- Rationale: HOF can be extracted with OpenCV on CPU, requires no GPU or C++ compilation, and yields a time series of descriptors suitable for ABD.
+- Recommended parameters (aligned with current ABD setup):
+  - clip_duration = 2.0 s
+  - clip_stride   = 0.4 s
+  - optical flow method: Farneback (fast). If needed, try TV-L1 or DIS for robustness.
+  - histogram bins (orientation): B = 16
+  - spatial grid: 1×1 (D = 16) or 2×2 (D = 64) for more robustness
+- Output format: per-video `X` as shape `(N_clips, D)`, saved to `{features_dir}/{video_stem}.npy`.
+- Suggested storage paths:
+  - D01: `/home/johnny/action_ws/comapred_algorithm/ABD/hof_features/D01`
+  - D02: `/home/johnny/action_ws/comapred_algorithm/ABD/hof_features/D02`
+- Expected runtime (CPU): 12 videos ≈ 0.5–1.5 hours with Farneback at 720p.
 
 ## Algorithm Steps
 Follow these steps exactly. Pseudocode and explanations are provided.
@@ -195,6 +219,40 @@ for m in range(len(B) - 1):  # Original segments
 - No temporal distance considered (unlike TW-FINCH), only semantic.
 - Efficient since M << N.
 - After merging, use Hungarian algorithm for evaluation (not part of algorithm; for metrics only).
+
+## HOF Extraction Instructions (Docs-only; no code changes required)
+
+- Environment: always use `laps`.
+- Basic workflow per video:
+  1. Decode frames with OpenCV.
+  2. Compute dense optical flow between consecutive frames (Farneback/TV-L1/DIS).
+  3. For each clip window (`clip_duration`, step `clip_stride`), aggregate an orientation histogram (magnitude-weighted), optionally per spatial grid cell.
+  4. L1-normalize the histogram and append as one row of `X`.
+  5. Save to `{features_dir}/{video_stem}.npy`.
+- Example run command (pseudo-batch):
+  ```bash
+  conda run -n laps python -c "import numpy as np, pathlib as p; from glob import glob; print('HOF extraction placeholder')"
+  ```
+
+## Integration with ABD (No code changes)
+
+- ABD expects `X` as `(N, D)`. HOF features fit seamlessly.
+- Use `--features-dir` to point to HOF outputs and run `run_abd.py` as usual (see abd_experiment.md for full commands).
+- Note: `meta_params["source"]` is currently fixed to `"i3d"` in the output JSON; functionality is unaffected.
+
+## Optional Minimal Code Changes (Not required now)
+
+- In `run_abd.py` (for metadata accuracy only):
+  - Extend `--feature-source` choices to include `hof`.
+  - Set `meta_params["source"] = args.feature_source` before saving JSON.
+- These do not change ABD logic or I/O and can be added later if needed.
+
+## Next Steps
+
+- [ ] Extract HOF features to `/home/johnny/action_ws/comapred_algorithm/ABD/hof_features/{D01,D02}` using the parameters above.
+- [ ] Run ABD with `--features-dir` pointing to the HOF outputs and generate results for D01/D02.
+- [ ] Evaluate with `tools/eval_segmentation.py` and record metrics.
+- [ ] (Optional) Apply the minimal metadata change for `feature-source` if desired.
 
 ## Hyperparameters
 
