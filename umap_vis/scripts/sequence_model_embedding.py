@@ -110,31 +110,188 @@ def umap_embed(X: np.ndarray, n_components: int, n_neighbors: int, min_dist: flo
 
 
 def plot_umap_2d(emb: np.ndarray, labels: Optional[np.ndarray], title: str, out_path: Path):
-    plt.figure(figsize=(10, 8))
+    """
+    生成论文级别的 UMAP 2D 可视化
+    - 高分辨率输出（300 DPI）
+    - 专业配色方案
+    - 优化的字体和布局
+    - 清晰的簇边界
+    """
+    plt.style.use('seaborn-v0_8-darkgrid')
+    fig, ax = plt.subplots(figsize=(12, 10), dpi=100)
+    
     c = np.arange(len(emb)) if labels is None else labels
-    sc = plt.scatter(emb[:, 0], emb[:, 1], c=c, cmap="tab20", s=36, alpha=0.75, edgecolors="none")
-    plt.title(title)
-    plt.xlabel("UMAP-1"); plt.ylabel("UMAP-2")
-    plt.colorbar(sc, label=("Cluster" if labels is not None else "Index"))
-    plt.tight_layout(); plt.savefig(str(out_path), dpi=150); plt.close()
-    print(f"保存 2D 图: {out_path}")
+    
+    # 使用高质量配色方案（适合论文）
+    if labels is not None and len(np.unique(labels)) <= 10:
+        # 离散簇：使用专业的离散色板
+        cmap = plt.cm.get_cmap('tab10')
+        unique_labels = np.unique(labels)
+        for label in unique_labels:
+            mask = labels == label
+            ax.scatter(emb[mask, 0], emb[mask, 1], 
+                      c=[cmap(label % 10)], 
+                      s=80, alpha=0.7, 
+                      edgecolors='black', linewidth=0.5,
+                      label=f'Cluster {int(label)}',
+                      rasterized=True)
+        ax.legend(loc='best', fontsize=28, framealpha=0.95, edgecolor='black', 
+                 title_fontsize=28, frameon=True, fancybox=False)
+    else:
+        # 连续标签：使用连续色板
+        sc = ax.scatter(emb[:, 0], emb[:, 1], c=c, cmap="viridis", 
+                       s=80, alpha=0.7, edgecolors='black', linewidth=0.5,
+                       rasterized=True)
+        cbar = plt.colorbar(sc, ax=ax, label=("Cluster ID" if labels is not None else "Sample Index"),
+                           pad=0.02, fraction=0.046)
+        cbar.ax.tick_params(labelsize=12)
+    
+    # 轴标签（不显示标题）
+    ax.set_xlabel("UMAP Dimension 1", fontsize=16, fontweight='bold')
+    ax.set_ylabel("UMAP Dimension 2", fontsize=16, fontweight='bold')
+    
+    # 优化网格和脊
+    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_linewidth(1.5)
+    ax.spines['bottom'].set_linewidth(1.5)
+    
+    # 优化刻度（增大字体）
+    ax.tick_params(axis='both', which='major', labelsize=13, width=1.5, length=6)
+    
+    plt.tight_layout()
+    plt.savefig(str(out_path), dpi=300, bbox_inches='tight', facecolor='white', edgecolor='none')
+    plt.close()
+    print(f"保存 2D 图 (300 DPI): {out_path}")
 
 
 def plot_umap_3d(emb: np.ndarray, labels: Optional[np.ndarray], title: str, out_path: Path):
+    """
+    生成论文级别的 UMAP 3D 交互式可视化
+    - 专业的配色方案
+    - 优化的标记大小和透明度
+    - 清晰的轴标签和标题
+    - 高质量的 HTML 输出
+    """
     try:
         import plotly.graph_objects as go  # type: ignore
     except Exception as e:
         print("[WARN] 需要安装 plotly: pip install plotly | 错误:", e)
         return
+    
     c = np.arange(len(emb)) if labels is None else labels
-    fig = go.Figure(data=[go.Scatter3d(
-        x=emb[:, 0], y=emb[:, 1], z=emb[:, 2],
-        mode='markers', marker=dict(size=5, color=c, colorscale='Viridis', showscale=True,
-                                    line=dict(color='rgba(0,0,0,0)', width=0))
-    )])
-    fig.update_layout(title=title, scene=dict(xaxis_title='UMAP-1', yaxis_title='UMAP-2', zaxis_title='UMAP-3'))
+    
+    # 定义专业的离散色板（适合论文）
+    discrete_colors = [
+        '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+        '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'
+    ]
+    
+    # 如果是离散簇标签，使用离散色板
+    if labels is not None and len(np.unique(labels)) <= 10:
+        unique_labels = sorted(np.unique(labels))
+        traces = []
+        for idx, label in enumerate(unique_labels):
+            mask = labels == label
+            color = discrete_colors[idx % len(discrete_colors)]
+            traces.append(go.Scatter3d(
+                x=emb[mask, 0], y=emb[mask, 1], z=emb[mask, 2],
+                mode='markers',
+                name=f'Cluster {int(label)}',
+                marker=dict(
+                    size=6,
+                    color=color,
+                    opacity=0.8,
+                    line=dict(color='rgba(0,0,0,0.3)', width=0.5)
+                ),
+                text=[f'Cluster {int(label)}'] * mask.sum(),
+                hovertemplate='<b>Cluster %{text}</b><br>X: %{x:.3f}<br>Y: %{y:.3f}<br>Z: %{z:.3f}<extra></extra>'
+            ))
+        fig = go.Figure(data=traces)
+    else:
+        # 连续标签：使用连续色板
+        fig = go.Figure(data=[go.Scatter3d(
+            x=emb[:, 0], y=emb[:, 1], z=emb[:, 2],
+            mode='markers',
+            marker=dict(
+                size=6,
+                color=c,
+                colorscale='Viridis',
+                showscale=True,
+                colorbar=dict(
+                    title="Cluster ID" if labels is not None else "Sample Index",
+                    thickness=15,
+                    len=0.7,
+                    x=1.02
+                ),
+                opacity=0.8,
+                line=dict(color='rgba(0,0,0,0.3)', width=0.5)
+            ),
+            hovertemplate='X: %{x:.3f}<br>Y: %{y:.3f}<br>Z: %{z:.3f}<extra></extra>'
+        )])
+    
+    # 优化布局（删除标题，增大字体）
+    fig.update_layout(
+        title=None,
+        scene=dict(
+            xaxis=dict(
+                title=dict(text='UMAP Dimension 1', font=dict(size=16, family='Arial, sans-serif', color='#000000')),
+                showgrid=True,
+                gridwidth=1,
+                gridcolor='#e0e0e0',
+                zeroline=False,
+                showline=True,
+                linewidth=2,
+                linecolor='#000000',
+                tickfont=dict(size=13, family='Arial, sans-serif')
+            ),
+            yaxis=dict(
+                title=dict(text='UMAP Dimension 2', font=dict(size=16, family='Arial, sans-serif', color='#000000')),
+                showgrid=True,
+                gridwidth=1,
+                gridcolor='#e0e0e0',
+                zeroline=False,
+                showline=True,
+                linewidth=2,
+                linecolor='#000000',
+                tickfont=dict(size=13, family='Arial, sans-serif')
+            ),
+            zaxis=dict(
+                title=dict(text='UMAP Dimension 3', font=dict(size=16, family='Arial, sans-serif', color='#000000')),
+                showgrid=True,
+                gridwidth=1,
+                gridcolor='#e0e0e0',
+                zeroline=False,
+                showline=True,
+                linewidth=2,
+                linecolor='#000000',
+                tickfont=dict(size=13, family='Arial, sans-serif')
+            ),
+            bgcolor='rgba(240, 240, 240, 0.9)',
+            camera=dict(
+                eye=dict(x=1.5, y=1.5, z=1.3)
+            )
+        ),
+        width=1000,
+        height=900,
+        font=dict(family='Arial, sans-serif', size=13, color='#000000'),
+        paper_bgcolor='white',
+        plot_bgcolor='rgba(240, 240, 240, 0.9)',
+        hovermode='closest',
+        showlegend=True,
+        legend=dict(
+            x=0.02,
+            y=0.98,
+            bgcolor='rgba(255, 255, 255, 0.9)',
+            bordercolor='#000000',
+            borderwidth=1,
+            font=dict(size=26, family='Arial, sans-serif')
+        )
+    )
+    
     fig.write_html(str(out_path))
-    print(f"保存 3D 图: {out_path}")
+    print(f"保存 3D 图 (高质量 HTML): {out_path}")
 
 
 # ---------------- 距离/指标 ----------------

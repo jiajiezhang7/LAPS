@@ -203,12 +203,33 @@ def main():
     parser.add_argument('--gt-dir', required=True, help='Directory of GT JSON files')
     parser.add_argument('--iou-thrs', nargs='+', type=float, default=[0.5, 0.75])
     parser.add_argument('--tolerance-sec', type=float, default=2.0)
+    parser.add_argument('--tolerance-secs', nargs='+', type=float, default=None, help='Optional list of boundary tolerances (seconds) to evaluate in addition to --tolerance-sec')
     parser.add_argument('--output', required=True)
     args = parser.parse_args()
 
-    gt_files = sorted(glob.glob(os.path.join(args.gt_dir, '*_segments.json')))
-    if not gt_files:
-        raise FileNotFoundError(f'No GT files under {args.gt_dir}')
+    tol_list = [float(args.tolerance_sec)]
+    if args.tolerance_secs:
+        tol_list = sorted(set([float(args.tolerance_sec)] + [float(x) for x in args.tolerance_secs]))
+
+    # Support both *_segments.json and *_segments_noisy.json; prefer non-noisy if both exist
+    patterns = ['*_segments.json', '*_segments_noisy.json']
+    matched = []
+    for pat in patterns:
+        matched.extend(glob.glob(os.path.join(args.gt_dir, pat)))
+    if not matched:
+        raise FileNotFoundError(f'No GT files under {args.gt_dir} (patterns: *_segments.json, *_segments_noisy.json)')
+    # Build unique mapping: {stem -> path}, prefer non-noisy when both present
+    gt_map = {}
+    for p in sorted(matched):
+        base = os.path.basename(p)
+        if base.endswith('_segments_noisy.json'):
+            stem = base[:-len('_segments_noisy.json')]
+            if stem not in gt_map:
+                gt_map[stem] = p
+        elif base.endswith('_segments.json'):
+            stem = base[:-len('_segments.json')]
+            gt_map[stem] = p
+    gt_files = [gt_map[k] for k in sorted(gt_map.keys())]
 
     per_video = {}
     all_preds = []  # (video_stem, (s,e), conf)
@@ -230,23 +251,43 @@ def main():
         if not os.path.exists(pred_seg_path):
             # no prediction for this video
             per_video[stem] = {
-                'f1_at_tol': 0.0, 'precision_at_tol': 0.0, 'recall_at_tol': 0.0,
                 'num_gt_boundaries': len(boundary_list(gt_segs, gt.get('video_duration_sec', 1e9))),
                 'num_pred_boundaries': 0,
             }
+            for t in tol_list:
+                per_video[stem][f"f1@{t:.1f}s"] = 0.0
+                per_video[stem][f"precision@{t:.1f}s"] = 0.0
+                per_video[stem][f"recall@{t:.1f}s"] = 0.0
+            # backward-compatible keys for the primary tolerance
+            per_video[stem]['f1_at_tol'] = per_video[stem][f"f1@{args.tolerance_sec:.1f}s"]
+            per_video[stem]['precision_at_tol'] = per_video[stem][f"precision@{args.tolerance_sec:.1f}s"]
+            per_video[stem]['recall_at_tol'] = per_video[stem][f"recall@{args.tolerance_sec:.1f}s"]
             continue
 
         pred = load_segments_json(pred_seg_path)
         pred_segs = segments_to_list(pred)
         duration = float(gt.get('video_duration_sec', pred.get('video_duration_sec', 0.0)))
-        f1, prec, rec, tp, num_pos, num_det = f1_at_tolerance(pred_segs, gt_segs, duration, args.tolerance_sec)
+
+        # compute metrics for each tolerance
+        metrics_for_t = {}
+        for t in tol_list:
+            f1, prec, rec, tp, num_pos, num_det = f1_at_tolerance(pred_segs, gt_segs, duration, t)
+            metrics_for_t[t] = (f1, prec, rec, tp, num_pos, num_det)
+
+        # use primary tolerance for backward-compatible keys
+        f1, prec, rec, tp, num_pos, num_det = metrics_for_t[float(args.tolerance_sec)]
+
         per_video[stem] = {
+            'num_gt_boundaries': num_pos,
+            'num_pred_boundaries': num_det,
             'f1_at_tol': f1,
             'precision_at_tol': prec,
             'recall_at_tol': rec,
-            'num_gt_boundaries': num_pos,
-            'num_pred_boundaries': num_det,
         }
+        for t, (f1t, pt, rt, _, _, _) in metrics_for_t.items():
+            per_video[stem][f"f1@{t:.1f}s"] = f1t
+            per_video[stem][f"precision@{t:.1f}s"] = pt
+            per_video[stem][f"recall@{t:.1f}s"] = rt
 
         # collect predictions with confidences for mAP
         energy_dir = os.path.dirname(pred_seg_path).replace('segmented_videos', '')
@@ -259,16 +300,17 @@ def main():
 
     map_results = evaluate_map_iou(all_preds, all_gts, args.iou_thrs)
 
-    # aggregate F1
-    f1_list = [v['f1_at_tol'] for v in per_video.values()]
-    prec_list = [v['precision_at_tol'] for v in per_video.values()]
-    rec_list = [v['recall_at_tol'] for v in per_video.values()]
+    # aggregate F1 for each requested tolerance
     summary = {
         'num_videos': len(per_video),
-        'F1@{:.1f}s_mean'.format(args.tolerance_sec): float(np.mean(f1_list) if f1_list else 0.0),
-        'Precision@{:.1f}s_mean'.format(args.tolerance_sec): float(np.mean(prec_list) if prec_list else 0.0),
-        'Recall@{:.1f}s_mean'.format(args.tolerance_sec): float(np.mean(rec_list) if rec_list else 0.0),
     }
+    for t in tol_list:
+        f1_list = [v.get(f"f1@{t:.1f}s", 0.0) for v in per_video.values()]
+        prec_list = [v.get(f"precision@{t:.1f}s", 0.0) for v in per_video.values()]
+        rec_list = [v.get(f"recall@{t:.1f}s", 0.0) for v in per_video.values()]
+        summary['F1@{:.1f}s_mean'.format(t)] = float(np.mean(f1_list) if f1_list else 0.0)
+        summary['Precision@{:.1f}s_mean'.format(t)] = float(np.mean(prec_list) if prec_list else 0.0)
+        summary['Recall@{:.1f}s_mean'.format(t)] = float(np.mean(rec_list) if rec_list else 0.0)
     summary.update(map_results)
 
     os.makedirs(os.path.dirname(args.output), exist_ok=True)

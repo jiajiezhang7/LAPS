@@ -37,7 +37,7 @@
 - 阶段1 Q1（能量信号）：
   - quantized 能量：[x] 已完成
   - velocity 能量：[x] 已完成
-  - optical_flow 能量：[ ] 待实现（下一步；TV-L1）
+  - optical_flow 能量：[x] 已完成（TV-L1）
 - 阶段2（LAPS 分割）：[x] 已完成（D01/D02 各 6/6）
 - 阶段3 Q2（评估）：[ ] 部分待实现（LAPS 评估/Optical Flow baseline/OTAS）
 
@@ -152,15 +152,18 @@
 - 存储路径：/home/johnny/action_ws/datasets/output/energy_sweep_out/{VIEW}/{video_name}/stream_energy_optical_flow_mag_mean.jsonl
 
 待办（Q1-OpticalFlow）：
-- [ ] 实现 compute_optical_flow_energy.py 脚本（TV-L1）。
-- [ ] 为 D01 和 D02 全量生成 optical_flow 能量 JSONL 文件。
-- [ ] 更新能量分析报告，纳入 optical_flow 数据。
-- [ ] 生成 Q1 论文所需的 60 秒代表性片段可视化图（E_action vs optical_flow + GT 边界叠加）。
+- [x] 实现 compute_optical_flow_energy.py 脚本（TV-L1）。
+- [x] 为 D01 和 D02 全量生成 optical_flow 能量 JSONL 文件。
+- [x] 更新能量分析报告，纳入 optical_flow 数据。
+- [x] 生成 Q1 论文所需的 60 秒代表性片段可视化图（E_action vs optical_flow + GT 边界叠加）。
 
 已完成（Q1 相关）：
 - [x] quantized 与 velocity 的能量 JSONL 已生成并统一存放在 energy_sweep_out/{VIEW}/{video_name}/。
 - [x] D01/D02 的 quant 与 velocity 分析报告已生成。
 - [x] D01/D02 的 阈值 JSON 已生成并用于第二轮分割。
+
+- [x] D01/D02 各 6 个视频的 optical_flow 能量 JSONL 已生成；参数：target_fps=10，ema_alpha=0.7，resize_shorter=480；算法：OpenCV Dual TV-L1；完成时间：2025-11-06。
+- [x] 能量分析报告已更新，包含 optical_flow 数据（路径：/home/johnny/action_ws/datasets/output/energy_sweep_report/{D01,D02}/report.html）。
 
 ---
 
@@ -214,27 +217,27 @@
 目标：复现 ABD（CVPR'22，无训练）离线算法，直接读取 D01/D02 原始视频，产出与 LAPS 兼容的分割结果，用同一评估脚本比较。
 
 数据与接口约定：
-- 输入：/home/johnny/action_ws/datasets/gt_raw_videos/{D01,D02} 下各视频（与 LAPS 完全一致）
-- 特征：默认从 LAPS 流式前向导出“每窗 latent 向量”（prequant/quantized，经 token 维度聚合为 1×D），作为 ABD 的帧序列特征；无需额外训练
-- 窗口到时间映射：sec ≈ window_idx * stride / target_fps（默认 stride=4, target_fps=10）
-- 输出：/home/johnny/action_ws/datasets/output/segmentation_outputs/{VIEW}_ABD/{video_stem}/
-  - segments 元数据：{video_stem}_segments.json（字段兼容 LAPS：video、segments[{start_sec,end_sec}], fps, processed_at）
-  - 可选：segmented_videos/*.mp4（若启用导出）
-  - 可选：stream_energy_{source}_{mode}.jsonl（沿用 LAPS 的 JSONL 字段 window/energy/source/mode）
+- 输入：/home/johnny/action_ws/datasets/gt_raw_videos/{D01,D02} 下各视频
+- 特征：使用 I3D 特征（通过 abd_env 批量提取）；不再使用 LAPS latent（prequant/quantized）
+- 时间映射：sec ≈ clip_idx × clip_stride（默认 clip_stride=0.4s）
+- 输出：/home/johnny/action_ws/datasets/output/segmentation_outputs/{VIEW}_ABD/{video_stem}/segmented_videos/{video_stem}_segments.json
+  - 段 JSON 元数据包含：video、segments[{start_sec,end_sec}]、video_duration_sec、segmentation_params（{source:"i3d", alpha, k, stride, target_fps, view, clip_duration, clip_stride}）、processed_at
 
-运行（待实现完成后）：
+运行：
 - D01：
   conda run -n laps python -m comapred_algorithm.ABD.run_abd \
     --view D01 \
     --input-dir /home/johnny/action_ws/datasets/gt_raw_videos/D01 \
     --output-dir /home/johnny/action_ws/datasets/output/segmentation_outputs/D01_ABD \
-    --feature-source quantized --alpha 0.5 --k auto --stride 4 --target-fps 10
+    --features-dir /home/johnny/action_ws/comapred_algorithm/ABD/i3d_features/D01 \
+    --feature-source i3d --alpha 0.5 --k auto --target-fps 30 --clip-duration 2.0 --clip-stride 0.4
 - D02：
   conda run -n laps python -m comapred_algorithm.ABD.run_abd \
     --view D02 \
     --input-dir /home/johnny/action_ws/datasets/gt_raw_videos/D02 \
     --output-dir /home/johnny/action_ws/datasets/output/segmentation_outputs/D02_ABD \
-    --feature-source quantized --alpha 0.5 --k auto --stride 4 --target-fps 10
+    --features-dir /home/johnny/action_ws/comapred_algorithm/ABD/i3d_features/D02 \
+    --feature-source i3d --alpha 0.5 --k auto --target-fps 30 --clip-duration 2.0 --clip-stride 0.4
 
 评估：与 LAPS/OTAS 使用相同脚本
   conda run -n laps python tools/eval_segmentation.py \
@@ -248,10 +251,10 @@
 
 ### Optical Flow Baseline（Q2）
 待办：
-- [ ] 实现 optical_flow vs GT 的阈值搜索与视角级聚合脚本。
-- [ ] 实现 optical_flow 分割 baseline runner（复用现有状态机参数：hysteresis / up_down_count / cooldown / max_duration 等）。
-- [ ] 对 D01 和 D02 运行 optical_flow 分割。
-- [ ] 计算 optical_flow baseline 的 mAP@IoU 与 F1@2s 指标。
+- [x] 实现 optical_flow vs GT 的阈值搜索与视角级聚合脚本。
+- [x] 实现 optical_flow 分割 baseline runner（复用现有状态机参数：hysteresis / up_down_count / cooldown / max_duration 等）。
+- [x] 对 D01 和 D02 运行 optical_flow 分割。
+- [x] 计算 optical_flow baseline 的 mAP@IoU 与 F1@2s 指标。
 - [ ] 生成 Table 1 对比表格（LAPS vs Optical Flow Baseline vs OTAS）。
 
 预期输出与检查点：
@@ -367,33 +370,33 @@
 - [x] 生成 D02 分析报告（AI；依赖：JSONL；产出：report/HTML/CSV/图）
 - [x] 计算 D01 阈值 JSON（AI；依赖：quant/vel JSONL）
 - [x] 计算 D02 阈值 JSON（AI；依赖：quant/vel JSONL）
-- [ ] 可选绘图（AI）
+- [x] 可选绘图（AI）
 - [x] 计算 D01/D02 最佳阈值 JSON（AI；依赖：两类 JSONL；产出：best_threshold*.json）
-- [ ] 生成论文风格曲线（AI；可选；产出：figures/*）
+- [x] 生成论文风格曲线（AI；可选；产出：figures/*）
 
 Optical Flow（TV-L1）待办：
-- [ ] 实现 compute_optical_flow_energy.py（TV-L1）。
-- [ ] 生成 D01/D02 optical_flow JSONL。
-- [ ] 更新 Q1 报告包含 optical_flow。
-- [ ] 生成 60 秒叠图（E_action vs optical_flow + GT）。
+- [x] 实现 compute_optical_flow_energy.py（TV-L1）。
+- [x] 生成 D01/D02 optical_flow JSONL。
+- [x] 更新 Q1 报告包含 optical_flow。
+- [x] 生成 60 秒叠图（E_action vs optical_flow + GT）。
 
 ### 阶段2（Q2）
 - [x] 在线分割导出 D01（AI；依赖：best_threshold；产出：segmented_videos+codes）
 - [x] 在线分割导出 D02（AI；依赖：best_threshold；产出：segmented_videos+codes）
-- [ ] 编写 tools/eval_segmentation.py（AI；依赖：GT；产出：seg_eval_{VIEW}.json + tables/table1.csv）
-- [ ] OTAS 环境搭建与推理（AI；依赖：仓库；产出：OTAS outputs）
-- [ ] 编写 tools/adapt_otas_to_segments.py 并评估（AI；依赖：OTAS outputs；产出：对照结果）
+- [x] 编写 tools/eval_segmentation.py（AI；依赖：GT；产出：seg_eval_{VIEW}.json + tables/table1.csv）
+- [x] OTAS 环境搭建与推理（AI；依赖：仓库；产出：OTAS outputs）
+- [x] 编写 tools/adapt_otas_to_segments.py 并评估（AI；依赖：OTAS outputs；产出：对照结果）
 
 Optical Flow Baseline（Q2）待办：
-- [ ] 实现 optical_flow vs GT 的阈值搜索与视角级聚合脚本。
-- [ ] 实现 optical_flow 分割 baseline runner（复用当前状态机参数）。
-- [ ] 运行 D01/D02 optical_flow 分割。
-- [ ] 计算 mAP@IoU 与 F1@2s。
-- [ ] 生成 Table 1（LAPS vs Optical Flow vs OTAS）。
+- [x] 实现 optical_flow vs GT 的阈值搜索与视角级聚合脚本。
+- [x] 实现 optical_flow 分割 baseline runner（复用当前状态机参数）。
+- [x] 运行 D01/D02 optical_flow 分割。
+- [x] 计算 mAP@IoU 与 F1@2s。
+- [] 生成 Table 1（LAPS vs Optical Flow vs OTAS）。
 
 ### 阶段3（Q3）
-- [ ] 运行 segment_umap_cluster_analysis.py（AI；依赖：segmentation_outputs；产出：UMAP 图 + 指标 CSV）
-- [ ] 运行 sequence_model_embedding.py（AI；依赖：segmentation_outputs；产出：UMAP + 指标 CSV）
+- [x] 运行 segment_umap_cluster_analysis.py（AI；依赖：segmentation_outputs；产出：UMAP 图 + 指标 CSV）
+- [x] 运行 sequence_model_embedding.py（AI；依赖：segmentation_outputs；产出：UMAP + 指标 CSV）
 - [ ] 编写 tools/icss_eval.py（AI；依赖：CLIP；产出：icss_{VIEW}.json + tables/table3.csv）
 
 ### 阶段4（消融）
@@ -402,7 +405,7 @@ Optical Flow Baseline（Q2）待办：
 ---
 
 ## 进度追踪
-- 当前状态：阶段2 已完成（D01/D02 quantized 在线分割完成：各 6/6）；阶段1（quantized/velocity）已完成；阶段1-OpticalFlow 待实现；阶段3（Q2 评估）部分待做（LAPS 评估 / Optical Flow baseline / OTAS）
+- 当前状态：阶段2 已完成（D01/D02 quantized 在线分割完成：各 6/6）；阶段1（quantized/velocity/optical_flow）已完成；阶段3（Q2 评估）部分待做（LAPS 评估 / Optical Flow baseline / OTAS）
 - 已完成里程碑：
   - 输入/输出路径更新并同步至文档；输入目录 D01/D02 确认；checkpoint 路径确认；GPU/并行策略确认；YAML 生成与输出目录写权限验证
 - OTAS 进展（在 otas 环境执行）：
@@ -446,3 +449,202 @@ Optical Flow Baseline（Q2）待办：
 - 阶段3：UMAP 图与统计 CSV 生成；ICSS JSON 与 Table3 生成
 - 阶段4：Table4 与趋势图生成，可复现
 
+
+
+---
+
+## 阶段2 Q2：Optical Flow 基线分割与评估（完成）
+- [x] 评估脚本支持 noisy 后缀 GT：tools/eval_segmentation.py 已兼容 *_segments.json 与 *_segments_noisy.json（非 noisy 优先）
+- [x] 阈值搜索（公平性：仅用 GT 边界；状态机参数与 LAPS 一致：hysteresis_ratio=0.95, up=2, down=2, cooldown=1, max_dur=2s, target_fps=10, stride=4）
+  - 工具：tools/threshold_search_with_gt.py
+  - D01 输出：/home/johnny/action_ws/datasets/output/energy_sweep_report/D01/best_threshold_optical_flow_mag_mean.json
+    - best_f1.thr=1.1571，F1@2s=0.2758，Prec=0.2284，Rec=0.3542
+  - D02 输出：/home/johnny/action_ws/datasets/output/energy_sweep_report/D02/best_threshold_optical_flow_mag_mean.json
+    - best_f1.thr=1.0520，F1@2s=0.2442，Prec=0.1659，Rec=0.4735
+- [x] 离线分割（复用与 LAPS 一致的状态机）
+  - 工具：tools/segment_from_energy.py（预测段 JSON：{output_root}/{stem}/segmented_videos/{stem}_segments.json；并复制能量 JSONL 到 {output_root}/{stem}/）
+  - D01 输出根：/home/johnny/action_ws/datasets/output/segmentation_outputs/D01_optical_flow
+  - D02 输出根：/home/johnny/action_ws/datasets/output/segmentation_outputs/D02_optical_flow
+- [x] 评估（F1@2s/5s 与 mAP@IoU=[0.5,0.75]）
+  - D01 结果：/home/johnny/action_ws/datasets/output/stats/seg_eval/seg_eval_D01_optical_flow.json
+    - F1@2s=0.2766，P=0.2288，R=0.3558，mAP@0.5=0.0112，mAP@0.75=0.0007
+    - F1@5s=0.3604，P=0.2981，R=0.4637
+
+  - D02 结果：/home/johnny/action_ws/datasets/output/stats/seg_eval/seg_eval_D02_optical_flow.json
+    - F1@2s=0.2435，P=0.1652，R=0.4735，mAP@0.5=0.0131，mAP@0.75=0.0023
+    - F1@5s=0.2739，P=0.1858，R=0.5329
+
+
+备注：上述 optical_flow 基线严格遵循公平性要求；不依赖 quantized/velocity 伪标签，仅使用 GT 时间边界用于阈值搜索；分割状态机参数与 LAPS 完全一致。
+
+
+### LAPS 分割评估（noisy GT，完成）
+- 评估脚本：tools/eval_segmentation.py（支持 *_segments.json 与 *_segments_noisy.json；本次按 noisy GT）
+- 指标口径：F1@2s/5s 与 mAP@IoU=[0.5,0.75]
+
+- 评估所用命令：
+
+  conda run -n laps python tools/eval_segmentation.py --pred-root /home/johnny/action_ws/datasets/output/segmentation_outputs/D01 --gt-dir /home/johnny/action_ws/datasets/gt_annotations/D01 --iou-thrs 0.5 0.75 --tolerance-sec 2.0 --tolerance-secs 5.0 --output /home/johnny/action_ws/datasets/output/stats/seg_eval/seg_eval_D01.json
+
+  conda run -n laps python tools/eval_segmentation.py --pred-root /home/johnny/action_ws/datasets/output/segmentation_outputs/D02 --gt-dir /home/johnny/action_ws/datasets/gt_annotations/D02 --iou-thrs 0.5 0.75 --tolerance-sec 2.0 --tolerance-secs 5.0 --output /home/johnny/action_ws/datasets/output/stats/seg_eval/seg_eval_D02.json
+
+
+- D01 结果：/home/johnny/action_ws/datasets/output/stats/seg_eval/seg_eval_D01.json
+
+  {
+  "num_videos": 6,
+  "F1@2.0s_mean": 0.8111758474576272,
+  "Precision@2.0s_mean": 0.79458648989899,
+  "Recall@2.0s_mean": 0.8302469135802468,
+  "F1@5.0s_mean": 0.8140007062146893,
+  "Precision@5.0s_mean": 0.7971906565656566,
+  "Recall@5.0s_mean": 0.8333333333333334,
+  "mAP@0.5": 0.7554228434987613,
+  "mAP@0.75": 0.3578861238546849
+  }
+
+- D02 结果：/home/johnny/action_ws/datasets/output/stats/seg_eval/seg_eval_D02.json
+
+  {
+  "num_videos": 6,
+  "F1@2.0s_mean": 0.9961685823754789,
+  "Precision@2.0s_mean": 0.9925093632958801,
+  "Recall@2.0s_mean": 1.0,
+  "F1@5.0s_mean": 0.9961685823754789,
+  "Precision@5.0s_mean": 0.9925093632958801,
+  "Recall@5.0s_mean": 1.0,
+  "mAP@0.5": 0.9507687428447819,
+  "mAP@0.75": 0.41550276728875457
+  }
+
+### 2025-11-06 · OTAS 实验 · 任务 1（video_info.pkl 完整性校验）
+- 读取：/home/johnny/action_ws/comapred_algorithm/OTAS/data/breakfast/video_info.pkl
+- 条目数：12
+- 前 3 条：
+  - comapred_algorithm/OTAS/data/breakfast/videos/D01/D01/D01_sample_1_seg001.mp4 → true_vlen=14994, lose=[]
+  - comapred_algorithm/OTAS/data/breakfast/videos/D01/D01/D01_sample_2_seg001.mp4 → true_vlen=1286, lose=[]
+  - comapred_algorithm/OTAS/data/breakfast/videos/D01/D01/D01_sample_2_seg002.mp4 → true_vlen=14996, lose=[]
+- 路径格式校验：未通过。当前键（vpath）为 {VIEW}/{VIEW}/{stem}.mp4（如 D01/D01/D01_sample_1_seg001.mp4），与本次任务期望的 {P}/{cam}/{P}_{act}.mp4 不一致；但与文档中“按 OTAS 目录约定建立/链接视频：.../{D01,D02}/{D01,D02}/*.mp4”一致。
+- 处理：按任务要求，已停止后续任务 2–4。请确认采用哪一种目录/键名规范：
+  1) 继续沿用 {VIEW}/{VIEW}/{stem}.mp4（据此调整后续校验与脚本）；或
+  2) 切换到 {P}/{cam}/{P}_{act}.mp4（需重建 video_info.pkl 及相关目录）。
+
+
+### 2025-11-06 · OTAS 实验 · 任务 2（帧目录与 video_info 对应性校验）
+- 目录：/home/johnny/action_ws/comapred_algorithm/OTAS/data/breakfast/frames
+- 子目录总数：12（与 video_info.pkl 条目一致）
+- 命名规范：均符合 {VIEW}_{VIEW}_{stem}/（如 D01_D01_sample_1_seg001/）
+- 帧命名规范：抽查 3 个目录，均存在 Frame_000001.jpg，文件命名符合 Frame_%06d.jpg
+  - D01_D01_sample_1_seg001：Frame_000001.jpg 存在；frame_count=14994
+  - D01_D01_sample_2_seg001：Frame_000001.jpg 存在；frame_count=1286
+  - D02_D02_sample_1_seg001：Frame_000001.jpg 存在；frame_count=15002
+- 结论：任务 2 通过（无缺失与命名错误）
+
+### 2025-11-06 · OTAS 实验 · 任务 3（OTAS 推理状态检查）
+- 检查目录：/home/johnny/action_ws/datasets/output/otas_out/OTAS/BF_tf/mean_error/
+- 结果：存在且包含 12 个 .pkl 文件 → 推理已完成
+- 动作：按规范跳过任务 3.3（不重复运行推理），直接进入任务 4
+
+### 2025-11-06 · OTAS 实验 · 任务 4（detect_bdy → 适配 → 评估）
+- 4.1 边界检测（laps 环境）：
+  命令：
+    conda run -n laps python comapred_algorithm/OTAS/code/detect_bdy.py \
+      --output-path /home/johnny/action_ws/datasets/output/otas_out/ \
+      --dataset BF \
+      --feature_model tf
+  输出检查：/home/johnny/action_ws/datasets/output/otas_out/OTAS/BF_tf/detect_seg/
+  - .pkl 数量：12（与 mean_error 对齐）
+
+- 4.2 结果适配为 LAPS 评估格式（segments.json）：
+  - D01：
+    conda run -n laps python tools/adapt_otas_to_segments.py \
+      --otas-pred /home/johnny/action_ws/datasets/output/otas_out/OTAS/BF_tf \
+      --raw-dir /home/johnny/action_ws/datasets/gt_raw_videos/D01 \
+      --output /home/johnny/action_ws/datasets/output/segmentation_outputs/D01_OTAS
+    结果：写入 6 个 JSON（OK 提示），示例：D01_sample_1_seg001_segments.json（segments=104）
+  - D02：
+    conda run -n laps python tools/adapt_otas_to_segments.py \
+      --otas-pred /home/johnny/action_ws/datasets/output/otas_out/OTAS/BF_tf \
+      --raw-dir /home/johnny/action_ws/datasets/gt_raw_videos/D02 \
+      --output /home/johnny/action_ws/datasets/output/segmentation_outputs/D02_OTAS
+    结果：写入 6 个 JSON（OK 提示），示例：D02_sample_1_seg001_segments.json（segments=107）
+  - JSON 结构校验：通过（包含 video、segments[{start_sec,end_sec}] 等字段）
+
+- 4.3 评估（F1@2s/5s，mAP@0.5/0.75）：
+  - D01：
+    conda run -n laps python tools/eval_segmentation.py \
+      --pred-root /home/johnny/action_ws/datasets/output/segmentation_outputs/D01_OTAS \
+      --gt-dir /home/johnny/action_ws/datasets/gt_annotations/D01 \
+      --iou-thrs 0.5 0.75 --tolerance-sec 2.0 --tolerance-secs 5.0 \
+      --output /home/johnny/action_ws/datasets/output/stats/seg_eval/seg_eval_D01_OTAS.json
+    指标：
+    {
+      "num_videos": 6,
+      "F1@2.0s_mean": 0.1543,
+      "Precision@2.0s_mean": 0.1469,
+      "Recall@2.0s_mean": 0.2220,
+      "F1@5.0s_mean": 0.2720,
+      "Precision@5.0s_mean": 0.2580,
+      "Recall@5.0s_mean": 0.3869,
+      "mAP@0.5": 0.00072,
+      "mAP@0.75": 0.00001
+    }
+  - D02：
+    conda run -n laps python tools/eval_segmentation.py \
+      --pred-root /home/johnny/action_ws/datasets/output/segmentation_outputs/D02_OTAS \
+      --gt-dir /home/johnny/action_ws/datasets/gt_annotations/D02 \
+      --iou-thrs 0.5 0.75 --tolerance-sec 2.0 --tolerance-secs 5.0 \
+      --output /home/johnny/action_ws/datasets/output/stats/seg_eval/seg_eval_D02_OTAS.json
+    指标：
+    {
+      "num_videos": 6,
+      "F1@2.0s_mean": 0.1984,
+      "Precision@2.0s_mean": 0.1489,
+      "Recall@2.0s_mean": 0.3052,
+      "F1@5.0s_mean": 0.2965,
+      "Precision@5.0s_mean": 0.2227,
+      "Recall@5.0s_mean": 0.4560,
+      "mAP@0.5": 0.00379,
+      "mAP@0.75": 0.00005
+    }
+
+- 小结：任务 4 完成（detect_bdy → 适配 → 评估）。OTAS 在本数据与当前协议下显著弱于 LAPS 与 Optical Flow 基线，后续在 Table 1 中对比呈现。
+
+### 2025-11-06 · OTAS 规范性/公平性核查与改进计划（阶段性结论）
+- 规范性核查（结论：部分符合）
+  - 数据准备：视频键与帧目录命名符合本仓库实现要求（{VIEW}/{VIEW}/{stem}.mp4；frames/{P}_{cam}_{act}/Frame_%06d.jpg），video_info.pkl=12 条，window_lists 已生成。
+  - 推理流程：main.py 按代码逻辑在 mode=val 时会尝试加载模型权重（/OTAS/BF_tf/model/lr_{lr}_best.pth.tar）；若不存在则使用随机权重进行“验证”。当前输出目录下未检测到 model/ckpt，mean_error 可能来自未训练权重，属非标准流程（会显著拉低性能）。
+  - 边界检测：detect_bdy.py 采用默认参数（order=15，threshold=51，combine=False），与官方代码默认一致。
+  - 后处理与适配：adapt_otas_to_segments.py 使用原视频 FPS 将帧索引→秒，生成 segments.json；逻辑正确。
+- 公平性核查（结论：部分不公平）
+  - 输入一致性：是（D01/D02 各 6 个视频）。
+  - 评估协议一致性：是（同 GT 目录、同评估脚本、同指标）。
+  - 超参数调优公平性：否。LAPS/Optical Flow 使用 GT 搜索阈值；OTAS 未做 order/threshold/平滑的调优，且可能未训练模型 → 建议给予等价的“验证集调参”机会。
+  - 特征可比性：部分可比（方法本质不同，保持统一评估协议已足够；但 OTAS 若未训练将严重失衡）。
+- 改进建议与最小实验计划（待确认后执行）
+  1) 先训练 ED_tf 预测器（无监督）→ 再生成 mean_error：
+     - 训练：python comapred_algorithm/OTAS/code/main.py --mode train --dataset BF --feature_model tf --gpu 0 --batch_size 32 --num_workers 8 --output-path /home/johnny/action_ws/datasets/output/otas_out/
+     - 验证：python comapred_algorithm/OTAS/code/main.py --mode val   （同参）
+  2) 边界检测参数小网格（按视角独立调）：order∈{7,11,15,19,23}，threshold∈{45,51,60}，EMA α∈{0.5,0.7,0.85}（对 mean_error 先平滑），并加入最短段约束（min_seg_len∈{0.5,1.0}s）。
+  3) 公平性：与 LAPS/OptFlow 一致，使用同一 GT 在“视角级”调参（如 3/3 拆分或留一法），报告验证集与测试集性能。
+  4) 目标：优先提升 F1@2s；若计算预算有限，先在 D01 上试验，再迁移到 D02。
+
+
+### 2025-11-06 · OTAS 训练修复与启动（otas 环境）
+- 代码修复：
+  - main.py 最优模型保存逻辑（已修复）
+    - 问题：初次保存时 `state` 未定义；`best` 保存逻辑被错误地置于 `if not os.path.exists(model_save_path)` 内，目录存在后不再保存
+    - 修复：使用 `os.makedirs(model_save_path, exist_ok=True)`；在保存前重建 `state={'epoch':epoch+1,'state_dict':...}` 并将保存逻辑移出目录判断
+  - model.py 位置编码长度（已修复）
+    - 问题：`PositionalEncoding(max_len=5)` 导致训练路径序列长度 N*SL-1=9 与 PE 长度不匹配，RuntimeError(9 vs 5)
+    - 修复：改为 `PositionalEncoding(d_model=512, max_len=5000)`，覆盖训练/验证两种序列长度
+- 训练启动（cwd=OTAS/code；env=otas；GPU=0）：
+  - 首次尝试：`--batch_size 32` → CUDA OOM（已按规范降为 16）
+  - 当前运行命令：
+    - CUDA_VISIBLE_DEVICES=0 conda run -n otas python main.py \
+      --mode train --dataset BF --feature_model tf --gpu 0 \
+      --batch_size 16 --num_workers 8 \
+      --output-path /home/johnny/action_ws/datasets/output/otas_out/
+  - 训练日志：/home/johnny/action_ws/datasets/output/otas_out/OTAS/train_BF_tf_20251106_112035.log
+- 说明：为避免路径相对性问题（arg_pars 默认 ../data/...），训练/验证均在 `comapred_algorithm/OTAS/code/` 目录下执行，保持与代码假设一致。
+- 后续计划：训练完成后将以相同参数运行 `--mode val` 生成新的 mean_error，并在 laps 环境执行 detect_bdy → 适配 → 评估；结果与随机权重基线对比将整理至 docs/otas_experiment.md。

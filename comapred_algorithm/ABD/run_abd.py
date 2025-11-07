@@ -27,88 +27,39 @@ def _infer_view_from_path(p: Path) -> Optional[str]:
     return None
 
 
-def _save_segments_json(out_dir: Path, video_path: Path, boundaries: List[int], stride: int, target_fps: int) -> Path:
-    out_dir.mkdir(parents=True, exist_ok=True)
+def _save_segments_json(out_dir: Path, video_path: Path, boundaries: List[int], clip_stride: float, meta_params: dict) -> Path:
+    # Ensure output directory and 'segmented_videos' subdir
+    sv_dir = out_dir / "segmented_videos"
+    sv_dir.mkdir(parents=True, exist_ok=True)
+
     b = [int(x) for x in boundaries]
     segs = []
     for i in range(len(b) - 1):
         s_win, e_win = b[i], b[i + 1]
-        start_sec = float(s_win * stride) / float(max(target_fps, 1))
-        end_sec = float(e_win * stride) / float(max(target_fps, 1))
+        start_sec = float(s_win) * float(clip_stride)
+        end_sec = float(e_win) * float(clip_stride)
         if end_sec <= start_sec:
             continue
         segs.append({"start_sec": round(start_sec, 4), "end_sec": round(end_sec, 4)})
+
+    duration = float(b[-1]) * float(clip_stride) if len(b) > 0 else 0.0
+    from datetime import datetime, timezone
     meta = {
-        "video": str(video_path),
+        "video": str(video_path.name),
         "segments": segs,
         "fps": None,
-        "processed_at": None,
+        "video_duration_sec": round(duration, 4),
+        "segmentation_params": meta_params,
+        "processed_at": datetime.now(timezone.utc).isoformat(),
     }
-    out_path = out_dir / f"{video_path.stem}_segments.json"
+    out_path = sv_dir / f"{video_path.stem}_segments.json"
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(meta, f, ensure_ascii=False, indent=2)
     return out_path
 
 
-def _load_features_npy(features_dir: Path, video_path: Path) -> Optional[np.ndarray]:
-    # Expect naming: {video_stem}.npy
-    cand = features_dir / f"{video_path.stem}.npy"
-    if cand.exists():
-        try:
-            return np.load(cand)
-        except Exception:
-            return None
-    return None
 
 
-def _extract_rgb_mean_features(video_path: Path, target_fps: int = 10, stride: int = 4, T: int = 16) -> Optional[np.ndarray]:
-    """Very light-weight fallback features for minimal E2E validation.
-    Returns (N, 3) array of mean RGB per window of ~T frames, step ~stride.
-    """
-    try:
-        import cv2
-    except Exception:
-        return None
-    cap = cv2.VideoCapture(str(video_path))
-    if not cap or not cap.isOpened():
-        return None
-    orig_fps = cap.get(cv2.CAP_PROP_FPS)
-    orig_fps = float(orig_fps) if orig_fps and orig_fps > 0 else 30.0
-    # frames per window and step in frames
-    win_frames = max(1, int(round(T * orig_fps / float(max(target_fps, 1)))))
-    step_frames = max(1, int(round(stride * orig_fps / float(max(target_fps, 1)))))
-    feats: List[np.ndarray] = []
-    frame_idx = 0
-    buf = []
-    def _flush(buf_list):
-        if len(buf_list) == 0:
-            return None
-        arr = np.stack(buf_list, axis=0)  # (F, H, W, 3)
-        m = arr.reshape(-1, 3).mean(axis=0)
-        return m
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        if frame_idx % step_frames == 0:
-            # start a new window: read next win_frames frames including current
-            frames = [frame]
-            for _ in range(win_frames - 1):
-                r2, f2 = cap.read()
-                if not r2:
-                    break
-                frames.append(f2)
-            m = _flush([cv2.resize(f, (64, 64)) for f in frames])
-            if m is not None:
-                feats.append(m.astype(np.float32))
-        frame_idx += 1
-    cap.release()
-    if len(feats) < 2:
-        return None
-    X = np.stack(feats, axis=0)  # (N, 3)
-    # Normalize per-dim
-    X = (X - X.mean(axis=0, keepdims=True)) / (X.std(axis=0, keepdims=True) + 1e-6)
-    return X.astype(np.float32)
 
 
 # -------- Main --------
@@ -118,12 +69,15 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--view", type=str, default=None, help="D01 or D02 (optional)")
     parser.add_argument("--input-dir", type=str, required=True, help="Directory of input videos")
     parser.add_argument("--output-dir", type=str, required=True, help="Root output dir for ABD results")
-    parser.add_argument("--features-dir", type=str, default=None, help="Optional directory of per-video npy features ({stem}.npy)")
-    parser.add_argument("--feature-source", type=str, default="npy", choices=["npy", "i3d", "rgb_mean"], help="Feature source")
+    parser.add_argument("--features-dir", type=str, default=None, help="Optional directory of precomputed I3D features ({stem}.npy)")
+    parser.add_argument("--feature-source", type=str, default="i3d", choices=["i3d"], help="Feature source (only i3d supported)")
     parser.add_argument("--alpha", type=float, default=0.5)
     parser.add_argument("--k", type=str, default="5", help="K segments (int) or 'auto'")
     parser.add_argument("--stride", type=int, default=4)
-    parser.add_argument("--target-fps", type=int, default=10)
+    parser.add_argument("--target-fps", type=int, default=30)
+    parser.add_argument("--clip-duration", type=float, default=2.0, help="I3D clip duration (seconds)")
+    parser.add_argument("--clip-stride", type=float, default=0.4, help="I3D clip stride (seconds)")
+    parser.add_argument("--i3d-device", type=str, default="cuda:0", help="Device for I3D feature extraction")
     args = parser.parse_args(argv)
 
     input_dir = Path(args.input_dir).resolve()
@@ -167,27 +121,32 @@ def main(argv: Optional[List[str]] = None) -> int:
     for vp in vids:
         view = args.view or _infer_view_from_path(vp)
         K_val = _resolve_k(view)
-        out_dir = output_root / (view or "UNK") / vp.stem
+        out_dir = output_root / vp.stem
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        # Load features
+        # Load features (prefer precomputed under --features-dir; fallback to on-the-fly extraction)
         X: Optional[np.ndarray] = None
-        if args.feature_source == "npy":
-            if features_dir is None:
-                print(f"[ABD][WARN] features_dir is required for npy source; skipping {vp.name}")
-                exit_code = 2
-                continue
-            X = _load_features_npy(features_dir, vp)
-        elif args.feature_source == "i3d":
+        if 'features_dir' in locals() and features_dir is not None:
+            pre = features_dir / f"{vp.stem}.npy"
+            if pre.exists():
+                try:
+                    X = np.load(pre)
+                except Exception as e:
+                    print(f"[ABD][WARN] Failed to load precomputed I3D for {vp.name}: {e}")
+        if X is None:
             try:
                 from .features_i3d import extract_i3d_features_for_video
-                X = extract_i3d_features_for_video(vp)
+                X = extract_i3d_features_for_video(
+                    vp,
+                    device=str(args.i3d_device),
+                    clip_duration=float(args.clip_duration),
+                    clip_stride=float(args.clip_stride),
+                    target_fps=int(args.target_fps),
+                )
             except Exception as e:
                 print(f"[ABD][ERROR] I3D feature extraction failed for {vp.name}: {e}")
                 exit_code = 3
                 continue
-        elif args.feature_source == "rgb_mean":
-            X = _extract_rgb_mean_features(vp, target_fps=int(args.target_fps), stride=int(args.stride), T=16)
         if X is None:
             print(f"[ABD][WARN] Features not available for {vp.name}; skip")
             exit_code = 2
@@ -200,8 +159,18 @@ def main(argv: Optional[List[str]] = None) -> int:
         # Run ABD
         res: ABDResult = abd_offline(X, K=K_val, alpha=float(args.alpha))
 
-        # Save segments json
-        seg_json = _save_segments_json(out_dir, vp, res.boundaries, stride=int(args.stride), target_fps=int(args.target_fps))
+        # Save segments json (time mapping by clip_stride)
+        meta_params = {
+            "source": "i3d",
+            "alpha": float(args.alpha),
+            "k": int(K_val),
+            "stride": int(args.stride),
+            "target_fps": int(args.target_fps),
+            "view": str(view) if view else None,
+            "clip_duration": float(args.clip_duration),
+            "clip_stride": float(args.clip_stride),
+        }
+        seg_json = _save_segments_json(out_dir, vp, res.boundaries, clip_stride=float(args.clip_stride), meta_params=meta_params)
         print(f"[ABD] Saved segments: {seg_json}")
 
     return exit_code
