@@ -119,7 +119,7 @@ conda run -n laps python tools/eval_segmentation.py \
 
 ## 预期输出与检查点
 
-- **分割输出**：segmentation_outputs/{D01_ABD,D02_ABD} 下有 segments.json 文件
+- **分割输出**：segmentation_outputs/{D01_ABD_HOF,D02_ABD_HOF} 下有 segments.json 文件
 - **评估结果**：stats/seg_eval/seg_eval_{D01,D02}_ABD.json 存在且指标合理
 - **对比表格**：tables/table1.csv 包含 LAPS vs ABD vs Optical Flow vs OTAS 的对比
 
@@ -128,26 +128,38 @@ conda run -n laps python tools/eval_segmentation.py \
 ## 详细 ToDoList
 
 ### ABD 实验任务
-- [ ] 生成 HOF 特征目录：/home/johnny/action_ws/comapred_algorithm/ABD/hof_features/{D01,D02}
-- [ ] 运行 D01 ABD 分割（使用 HOF）：输出到 D01_ABD_HOF
+- [x] 生成 HOF 特征（D01）：/home/johnny/action_ws/comapred_algorithm/ABD/hof_features/D01
+- [ ] 生成 HOF 特征（D02）：/home/johnny/action_ws/comapred_algorithm/ABD/hof_features/D02
+- [x] 运行 D01 ABD 分割（使用 HOF）：输出到 D01_ABD_HOF
 - [ ] 运行 D02 ABD 分割（使用 HOF）：输出到 D02_ABD_HOF
-- [ ] 评估 D01 ABD（HOF）结果
+- [x] 评估 D01 ABD（HOF）结果
 
 - [ ] 评估 D02 ABD（HOF）结果
 - [ ] 生成对比表格 (Table 1)
 - [x] （可选）最小代码修改：`run_abd.py` 支持 `--feature-source hof` 并将 `meta_params["source"]` 写入对应值（仅影响元数据）
 
+## D01 评估结果（HOF）
+
+- 数据集：D01（num_videos = 6）
+- 评估 JSON：/home/johnny/action_ws/datasets/output/stats/seg_eval/seg_eval_D01_ABD.json
+- 指标（平均值）：
+  - F1@2s = 0.175，Precision@2s = 0.155，Recall@2s = 0.212
+  - F1@5s = 0.304，Precision@5s = 0.267，Recall@5s = 0.370
+  - mAP@0.5 = 0.0013，mAP@0.75 ≈ 0.00003
+
+---
+
 ---
 
 ## 进度追踪
 
-- 当前状态：已实现 HOF 特征提取脚本并启动 D01 批量提取（后台运行）
+- 当前状态：D01 HOF 特征提取已完成；D01 ABD 分割与评估已完成；准备进行 D02
 - 依赖项：
-  - [ ] HOF 特征提取（进行中：D01 已启动；输出目录 /home/johnny/action_ws/comapred_algorithm/ABD/hof_features/{D01,D02}）
+  - [ ] HOF 特征提取（D01 已完成；D02 待完成；输出目录 /home/johnny/action_ws/comapred_algorithm/ABD/hof_features/{D01,D02}）
   - [x] GT 标注已准备
   - [x] 评估脚本已准备（tools/eval_segmentation.py）
-  - [ ] ABD 分割运行（D01_ABD_HOF / D02_ABD_HOF）
-  - [ ] 评估与对比
+  - [ ] ABD 分割运行（D01 已完成；D02 待完成）
+  - [ ] 评估（D01 已完成；D02 待完成）与对比
 
 ---
 
