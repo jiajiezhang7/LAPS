@@ -69,8 +69,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--view", type=str, default=None, help="D01 or D02 (optional)")
     parser.add_argument("--input-dir", type=str, required=True, help="Directory of input videos")
     parser.add_argument("--output-dir", type=str, required=True, help="Root output dir for ABD results")
-    parser.add_argument("--features-dir", type=str, default=None, help="Optional directory of precomputed I3D features ({stem}.npy)")
-    parser.add_argument("--feature-source", type=str, default="i3d", choices=["i3d"], help="Feature source (only i3d supported)")
+    parser.add_argument("--features-dir", type=str, default=None, help="Optional directory of precomputed features (e.g., I3D/HOF) as {stem}.npy")
+    parser.add_argument("--feature-source", type=str, default="i3d", choices=["i3d", "hof"], help="Feature source (i3d or hof); affects metadata only")
     parser.add_argument("--alpha", type=float, default=0.5)
     parser.add_argument("--k", type=str, default="5", help="K segments (int) or 'auto'")
     parser.add_argument("--stride", type=int, default=4)
@@ -132,20 +132,25 @@ def main(argv: Optional[List[str]] = None) -> int:
                 try:
                     X = np.load(pre)
                 except Exception as e:
-                    print(f"[ABD][WARN] Failed to load precomputed I3D for {vp.name}: {e}")
+                    print(f"[ABD][WARN] Failed to load precomputed features for {vp.name}: {e}")
         if X is None:
-            try:
-                from .features_i3d import extract_i3d_features_for_video
-                X = extract_i3d_features_for_video(
-                    vp,
-                    device=str(args.i3d_device),
-                    clip_duration=float(args.clip_duration),
-                    clip_stride=float(args.clip_stride),
-                    target_fps=int(args.target_fps),
-                )
-            except Exception as e:
-                print(f"[ABD][ERROR] I3D feature extraction failed for {vp.name}: {e}")
-                exit_code = 3
+            if str(args.feature_source).lower() == "i3d":
+                try:
+                    from .features_i3d import extract_i3d_features_for_video
+                    X = extract_i3d_features_for_video(
+                        vp,
+                        device=str(args.i3d_device),
+                        clip_duration=float(args.clip_duration),
+                        clip_stride=float(args.clip_stride),
+                        target_fps=int(args.target_fps),
+                    )
+                except Exception as e:
+                    print(f"[ABD][ERROR] I3D feature extraction failed for {vp.name}: {e}")
+                    exit_code = 3
+                    continue
+            else:
+                print(f"[ABD][WARN] No precomputed features for {vp.name} and feature_source='{args.feature_source}'; skip")
+                exit_code = 2
                 continue
         if X is None:
             print(f"[ABD][WARN] Features not available for {vp.name}; skip")
@@ -161,7 +166,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
         # Save segments json (time mapping by clip_stride)
         meta_params = {
-            "source": "i3d",
+            "source": str(args.feature_source),
             "alpha": float(args.alpha),
             "k": int(K_val),
             "stride": int(args.stride),

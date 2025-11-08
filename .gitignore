@@ -34,3 +34,6 @@ umap_vis/classify_res/
 datasets/
 video_action_segmenter/figures/
 stream_infer_results/
+clip-vit-base-patch32/
+clip-vit-large-patch14/
+comapred_algorithm/ABD/hof_features/

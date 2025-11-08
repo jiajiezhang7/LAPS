@@ -10,6 +10,7 @@
     - Action Energy JSONL（Quantized/Velocity）：若无，可用在线脚本生成；示例仓库已有 D02 样例：`/home/johnny/action_ws/video_action_segmenter/energy_sweep_out/D02_20250811064933/`
   - Ground Truth 目录：`/home/johnny/action_ws/datasets/gt_segments/{VIEW}`（包含 `{stem}_segments.json`）。若路径不同，请在命令中替换。
   - 仅当特别说明时才需要其他环境（如 `abd_env`/`otas`）。本补充实验全部可在 `laps` 完成。
+  - 所有与supplement相关的实验（也即本文档所涉及的实验的输出结果，都必须生成在/home/johnny/action_ws/supplement_output文件夹下，并妥善管理子文件夹结构
 
 ---
 

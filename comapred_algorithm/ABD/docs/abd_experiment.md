@@ -43,10 +43,26 @@
   - video：视频文件名
   - segments：[{start_sec, end_sec}, ...]
   - video_duration_sec：视频总时长
-  - segmentation_params：{source:"i3d", alpha, k, stride, target_fps, view, clip_duration, clip_stride}
+  - segmentation_params：{source:"hof", alpha, k, stride, target_fps, view, clip_duration, clip_stride}
   - processed_at：处理时间戳
 
 ### 运行命令
+### HOF 特征提取
+
+#### D01 HOF 提取
+```bash
+conda run -n abd_env python -m comapred_algorithm.ABD.batch_extract_hof \
+  --view D01 --clip-duration 2.0 --clip-stride 0.4 --bins 16
+```
+输出目录：/home/johnny/action_ws/comapred_algorithm/ABD/hof_features/D01/{video_stem}.npy
+
+#### D02 HOF 提取
+```bash
+conda run -n abd_env python -m comapred_algorithm.ABD.batch_extract_hof \
+  --view D02 --clip-duration 2.0 --clip-stride 0.4 --bins 16
+```
+输出目录：/home/johnny/action_ws/comapred_algorithm/ABD/hof_features/D02/{video_stem}.npy
+
 
 #### D01 分割
 ```bash
@@ -55,7 +71,7 @@ conda run -n laps python -m comapred_algorithm.ABD.run_abd \
   --input-dir /home/johnny/action_ws/datasets/gt_raw_videos/D01 \
   --output-dir /home/johnny/action_ws/datasets/output/segmentation_outputs/D01_ABD_HOF \
   --features-dir /home/johnny/action_ws/comapred_algorithm/ABD/hof_features/D01 \
-  --feature-source i3d --alpha 0.5 --k auto --target-fps 30 --clip-duration 2.0 --clip-stride 0.4
+  --feature-source hof --alpha 0.5 --k auto --target-fps 30 --clip-duration 2.0 --clip-stride 0.4
 ```
 
 #### D02 分割
@@ -65,7 +81,7 @@ conda run -n laps python -m comapred_algorithm.ABD.run_abd \
   --input-dir /home/johnny/action_ws/datasets/gt_raw_videos/D02 \
   --output-dir /home/johnny/action_ws/datasets/output/segmentation_outputs/D02_ABD_HOF \
   --features-dir /home/johnny/action_ws/comapred_algorithm/ABD/hof_features/D02 \
-  --feature-source i3d --alpha 0.5 --k auto --target-fps 30 --clip-duration 2.0 --clip-stride 0.4
+  --feature-source hof --alpha 0.5 --k auto --target-fps 30 --clip-duration 2.0 --clip-stride 0.4
 ```
 
 ### 评估
@@ -92,11 +108,11 @@ conda run -n laps python tools/eval_segmentation.py \
 
 ### 环境
 
-- 推荐复用 laps 环境（ABD 仅依赖 numpy/scipy）
-- 提取 HOF 需要 OpenCV（CPU）与 tqdm（可选进度条）：
+- 运行环境：
+  - ABD 分割/评估：laps 环境
+  - HOF 特征提取：abd_env 环境（已验证 OpenCV 可用）
   ```bash
-  conda run -n laps python -c "import cv2; print(cv2.__version__)" \
-    || conda run -n laps pip install opencv-python tqdm
+  conda run -n abd_env python -c "import cv2; print(cv2.__version__)"
   ```
 
 ---
@@ -116,17 +132,18 @@ conda run -n laps python tools/eval_segmentation.py \
 - [ ] 运行 D01 ABD 分割（使用 HOF）：输出到 D01_ABD_HOF
 - [ ] 运行 D02 ABD 分割（使用 HOF）：输出到 D02_ABD_HOF
 - [ ] 评估 D01 ABD（HOF）结果
+
 - [ ] 评估 D02 ABD（HOF）结果
 - [ ] 生成对比表格 (Table 1)
-- [ ] （可选）最小代码修改：`run_abd.py` 支持 `--feature-source hof` 并将 `meta_params["source"]` 写入对应值（仅影响元数据）
+- [x] （可选）最小代码修改：`run_abd.py` 支持 `--feature-source hof` 并将 `meta_params["source"]` 写入对应值（仅影响元数据）
 
 ---
 
 ## 进度追踪
 
-- 当前状态：切换至 HOF 特征方案，准备提取
+- 当前状态：已实现 HOF 特征提取脚本并启动 D01 批量提取（后台运行）
 - 依赖项：
-  - [ ] HOF 特征提取完成（/comapred_algorithm/ABD/hof_features/{D01,D02}）
+  - [ ] HOF 特征提取（进行中：D01 已启动；输出目录 /home/johnny/action_ws/comapred_algorithm/ABD/hof_features/{D01,D02}）
   - [x] GT 标注已准备
   - [x] 评估脚本已准备（tools/eval_segmentation.py）
   - [ ] ABD 分割运行（D01_ABD_HOF / D02_ABD_HOF）
@@ -135,6 +152,12 @@ conda run -n laps python tools/eval_segmentation.py \
 ---
 
 ## 关键参数说明
+
+- 今日更新（2025-11-07）：
+  - 新增 HOF 提取脚本：`comapred_algorithm/ABD/features_hof.py`；批处理脚本：`comapred_algorithm/ABD/batch_extract_hof.py`
+  - `run_abd.py`：新增 `--feature-source hof`；元数据 `meta_params['source']` 随参数写入
+  - 在 `abd_env` 验证 OpenCV 可用（4.12.0）
+  - 已后台启动 D01 HOF 批量提取：`conda run -n abd_env python -m comapred_algorithm.ABD.batch_extract_hof --view D01`
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
