@@ -168,20 +168,64 @@ def encode_segment_clip(mp4_path: Path, model: CLIPModel, processor, device: str
     if len(imgs) == 0:
         # generate a black image to avoid crash
         imgs = [Image.new('RGB', (224, 224), color=(0, 0, 0))]
+
+    # 手工预处理，避免老版本 transformers 与 numpy/torch 的 dtype 兼容问题
+    # 目标：生成 (m,3,224,224) 的 float32 张量，按 CLIP 规范归一化
+    def _preprocess_clip_images(img_list: List[Image.Image]) -> torch.Tensor:
+        try:
+            import numpy as _np
+            import torch as _torch
+        except Exception:
+            raise
+        mean = _np.array([0.48145466, 0.4578275, 0.40821073], dtype=_np.float32)
+        std  = _np.array([0.26862954, 0.26130258, 0.27577711], dtype=_np.float32)
+        arrs = []
+        for im in img_list:
+            if not isinstance(im, Image.Image):
+                # 尝试从 ndarray 恢复
+                try:
+                    if isinstance(im, _np.ndarray):
+                        if im.ndim == 3 and im.shape[2] == 3:
+                            im = Image.fromarray(im.astype(_np.uint8))
+                        else:
+                            # 灰度或其他情况，转RGB
+                            im = Image.fromarray(_np.stack([im]*3, axis=-1).astype(_np.uint8))
+                except Exception:
+                    pass
+            if not isinstance(im, Image.Image):
+                # 兜底：黑图
+                im = Image.new('RGB', (224, 224), color=(0, 0, 0))
+            im = im.convert('RGB')
+            # resize 最短边到 224，并中心裁剪到 224x224
+            w, h = im.size
+            scale = 224.0 / min(w, h) if min(w, h) > 0 else 1.0
+            new_w, new_h = int(round(w*scale)), int(round(h*scale))
+            im_resized = im.resize((max(1, new_w), max(1, new_h)), resample=Image.BICUBIC)
+            # 中心裁剪
+            left = max(0, (im_resized.width - 224)//2)
+            top = max(0, (im_resized.height - 224)//2)
+            im_cropped = im_resized.crop((left, top, left+224, top+224))
+            x = _np.asarray(im_cropped, dtype=_np.float32) / 255.0  # (224,224,3)
+            x = (x - mean) / std
+            arrs.append(x)
+        X = _np.stack(arrs, axis=0)  # (m,224,224,3)
+        X = _np.transpose(X, (0, 3, 1, 2))  # (m,3,224,224)
+        return _torch.tensor(X, dtype=_torch.float32)
+
     with torch.no_grad():
-        inputs = processor(images=imgs, return_tensors='pt')
-        pixel_values = inputs['pixel_values'].to(device)
-        feats = model.get_image_features(pixel_values=pixel_values)
-        feats = feats.detach().cpu().float().numpy()  # (m, d)
-    norms = np.linalg.norm(feats, axis=1) + 1e-9
-    normed = feats / norms[:, None]
+        pixel_values = _preprocess_clip_images(imgs).to(device)
+        feats_t = model.get_image_features(pixel_values=pixel_values)  # (m, d) torch.Tensor
+        feats_t = feats_t.detach().float().cpu()
+    # 全部在 torch 中完成，避免 numpy C-API 兼容性问题
+    norms_t = torch.linalg.norm(feats_t, dim=1) + 1e-9  # (m,)
+    normed_t = feats_t / norms_t.unsqueeze(1)           # (m,d)
     if weight_by_norm:
-        w = norms / norms.sum()
+        w_t = norms_t / norms_t.sum()
     else:
-        w = np.ones(len(norms), dtype=np.float32) / float(len(norms))
-    z = (w[:, None] * normed).sum(axis=0)
-    z = z / (np.linalg.norm(z) + 1e-9)
-    return z.astype(np.float32)
+        w_t = torch.ones_like(norms_t) / float(norms_t.numel())
+    z_t = (w_t.unsqueeze(1) * normed_t).sum(dim=0)      # (d,)
+    z_t = z_t / (torch.linalg.norm(z_t) + 1e-9)
+    return z_t.cpu().numpy().astype(np.float32)
 
 
 def extract_seq_labels(series_list: List[np.ndarray], seq_mod, metric: str = 'cosine', k_min: int = 3, k_max: int = 10,
@@ -473,6 +517,7 @@ def main():
     p.add_argument('--cluster-pairs-cap', type=int, default=100_000)
     p.add_argument('--baseline-R', type=int, default=5)
     p.add_argument('--seed', type=int, default=42)
+    p.add_argument('--skip-figs', action='store_true', help='Skip matplotlib visualizations to avoid env issues')
     args = p.parse_args()
 
     set_seed(args.seed)
@@ -521,7 +566,8 @@ def main():
     baseline = random_baseline(Z, M=int(all_sims.size), R=args.baseline_R, rng=np.random.RandomState(args.seed + 1))
 
     # 7) Visualizations (hist + per-cluster boxplot)
-    visualize(all_sims, per_cluster_sims, baseline_means=baseline['per_rep_means'], out_dir=out_dir / 'figs')
+    if not args.skip_figs:
+        visualize(all_sims, per_cluster_sims, baseline_means=baseline['per_rep_means'], out_dir=out_dir / 'figs')
 
     # 8) Save outputs
     # segments mapping
@@ -531,11 +577,12 @@ def main():
     np.save(out_dir / 'clip_features.npy', Z)
 
     # 7b) Publication-quality visualizations (KDE + 95% CI + combined)
-    baseline_sims = sample_random_pair_sims(Z, M=int(all_sims.size), rng=np.random.RandomState(args.seed + 2))
-    visualize_publication_quality(per_cluster_sims=per_cluster_sims,
-                                 baseline_sims=baseline_sims,
-                                 out_dir=out_dir / 'figs',
-                                 n_boot=2000)
+    if not args.skip_figs:
+        baseline_sims = sample_random_pair_sims(Z, M=int(all_sims.size), rng=np.random.RandomState(args.seed + 2))
+        visualize_publication_quality(per_cluster_sims=per_cluster_sims,
+                                     baseline_sims=baseline_sims,
+                                     out_dir=out_dir / 'figs',
+                                     n_boot=2000)
 
 
     # per-cluster stats

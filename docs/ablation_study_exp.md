@@ -18,14 +18,14 @@
 
 | 消融配置 | Seg. F1 | ICSS | 关键发现及实践指导 |
 | :--- | :--- | :--- | :--- |
-| **Full Pipeline (Ours)** | **46.3** | **0.65** | **基准**：代表最佳性能配置。 |
+| **Full Pipeline (Ours)** | **0.8112** | **0.9210** | **基准**：代表最佳性能配置。 |
 | **信号源消融** | | | |
-| $\quad E_{\text{action}}$ from Pre-Quant. Latents | 41.7 | -- | **结论**：量化 (Quantization) 是必要的，它抽象了噪声并使潜在向量更具判别性。 |
-| $\quad E_{\text{action}}$ from Raw Velocities | 30.2 | -- | **结论**：**必须**在抽象的潜在动作空间 (Latent Space) 而非低级物理空间（Raw Velocities）进行分割，以捕获语义意图变化。 |
+| $\quad E_{\text{action}}$ from Pre-Quant. Latents | 0.2518 | -- | **结论**：量化 (Quantization) 是必要的，它抽象了噪声并使潜在向量更具判别性。 |
+| $\quad E_{\text{action}}$ from Raw Velocities | 0.2491 | -- | **结论**：**必须**在抽象的潜在动作空间 (Latent Space) 而非低级物理空间（Raw Velocities）进行分割，以捕获语义意图变化。 |
 | **表征消融** | | | |
-| $\quad$ w/o $M_\theta$ (e.g., CLIP) | 25.8 | 0.21 | **结论**：**必须**训练领域专用的 Motion Tokenizer ($M_\theta$) 来捕捉工业任务的精细动作。通用视觉特征效果不佳。 |
+| $\quad$ w/o $M_\theta$ (e.g., CLIP) | 0.2720 | 0.9210 | **结论**：**必须**训练领域专用的 Motion Tokenizer ($M_\theta$) 来捕捉工业任务的精细动作。通用视觉特征效果不佳。 |
 | **编码器消融** | | | |
-| $\quad$ w/o Transformer (Mean-pool) | -- | 0.38 | **结论**：**必须**使用 Frozen Transformer 或类似时序模型来编码动作序列，简单的平均池化无法实现高质量的语义聚类。 |
+| $\quad$ w/o Transformer (Mean-pool) | -- | 0.9211 | **结论**：**必须**使用 Frozen Transformer 或类似时序模型来编码动作序列，简单的平均池化无法实现高质量的语义聚类。 |
 
 
 

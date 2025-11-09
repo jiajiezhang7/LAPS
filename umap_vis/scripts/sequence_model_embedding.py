@@ -411,8 +411,12 @@ class TinyTransformer:
         self.use_cls = (pooling == "cls")
         self.proj = nn.Linear(in_dim, d_model)
         self.pe = build_positional_encoding(d_model)
-        enc_layer = TransformerEncoderLayer(d_model=d_model, nhead=n_heads, dim_feedforward=dim_ff, dropout=dropout, batch_first=False, activation="gelu")
-        self.encoder = TransformerEncoder(enc_layer, num_layers=n_layers)
+        # 支持 n_layers=0（用于 w/o Transformer 的消融）：直接使用 Identity 替代编码器
+        if n_layers > 0:
+            enc_layer = TransformerEncoderLayer(d_model=d_model, nhead=n_heads, dim_feedforward=dim_ff, dropout=dropout, batch_first=False, activation="gelu")
+            self.encoder = TransformerEncoder(enc_layer, num_layers=n_layers)
+        else:
+            self.encoder = nn.Identity()
         if self.use_cls:
             self.cls = nn.Parameter(torch.zeros(1, 1, d_model))
         else:
@@ -442,7 +446,7 @@ class TinyTransformer:
 
     def encode_one(self, seq: np.ndarray) -> np.ndarray:
         torch = self.torch; nn = self.nn
-        x = torch.from_numpy(seq).to(self.device)  # (T,in)
+        x = torch.tensor(seq, dtype=torch.float32, device=self.device)  # (T,in)
         with torch.no_grad():
             z = self.proj(x)  # (T,d)
             z = z.unsqueeze(1)  # (T,1,d)

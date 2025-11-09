@@ -14,7 +14,8 @@ def to_clip_tensor(frames: List[np.ndarray], device: torch.device) -> Tuple[torc
     H, W = arr.shape[1], arr.shape[2]
     arr = arr[:, :, :, ::-1]  # BGR -> RGB
     arr = arr.astype(np.float32) / 255.0
-    clip = torch.from_numpy(arr).permute(0, 3, 1, 2).to(device)  # T, 3, H, W
+    # Avoid torch.from_numpy to sidestep NumPy C-API compatibility issues; make an explicit tensor copy
+    clip = torch.tensor(arr, dtype=torch.float32, device=device).permute(0, 3, 1, 2)  # T, 3, H, W
     return clip, H, W
 
 
