@@ -117,7 +117,7 @@ def train_epoch(train_global_iter, model, train_loader, optimizer, scaler, devic
         metrics = get_traj_metrics(x_recon_vis, x, cfg.img_shape)
         logger.update({"train_loss": loss.item(), "train_metrics": metrics}, train_global_iter, phase='train')
 
-        if train_global_iter % cfg.log_interval == 0:
+        if train_global_iter % cfg.log_interval == 0 and 'images' in batch:
             gt_img = vis_pred(batch['images'][[0]], x[[0]].cpu()).numpy()
             vis_img = vis_pred(batch['images'][[0]], x_recon_vis[[0]].cpu()).numpy()
             combined_img = np.concatenate([gt_img[0], vis_img[0]], axis=0)
@@ -257,7 +257,7 @@ def val_epoch(val_global_iter, model, val_loader, device, logger, cfg):
         metrics = get_traj_metrics(x_recon_vis, x, cfg.img_shape)
         logger.update({"val_loss": loss.item(), "val_metrics": metrics, "val_codebook_perplexity": codebook_perplexity.item()}, val_global_iter, phase='val')
 
-        if val_global_iter % cfg.log_interval == 0:
+        if val_global_iter % cfg.log_interval == 0 and 'images' in batch:
             gt_img = vis_pred(batch['images'][[0]], x[[0]].cpu()).numpy()
             vis_img = vis_pred(batch['images'][[0]], x_recon_vis[[0]].cpu()).numpy()
             combined_img = np.concatenate([gt_img[0], vis_img[0]], axis=0)

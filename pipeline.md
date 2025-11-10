@@ -75,6 +75,19 @@
     resume=false run_name=epochs2_complete500_d02_m10 \
     use_wandb=true lr_schedule=null
 
+- complete train getea
+  python amplify/train_motion_tokenizer.py \
+    root_dir=/media/johnny/48FF-AA60/preprocessed_data_gtea_m10/split1 \
+    train_datasets=[custom_segments:traj0.8] \
+    val_datasets=[custom_segments:traj0.2] \
+    cond_cameraviews=[default] \
+    keys_to_load=[tracks,images] \
+    img_shape=[480,771] \
+    true_horizon=16 track_pred_horizon=16 \
+    batch_size=8 gpu_max_bs=8 num_epochs=10 \
+    quick=false num_workers=4 log_interval=8 \
+    resume=false run_name=epochs10_gtea_split1_m10 \
+    use_wandb=true lr_schedule=null
 #### CoTracker可视化
 
 - 对一个动作视频，分T=16滑动窗口，进行CoTracker跟踪（每窗口重采样） —— 更符合当前方法论 （prefered）

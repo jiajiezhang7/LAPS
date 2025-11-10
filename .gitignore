@@ -37,3 +37,5 @@ stream_infer_results/
 clip-vit-base-patch32/
 clip-vit-large-patch14/
 comapred_algorithm/ABD/hof_features/
+online_datasets/
+output/

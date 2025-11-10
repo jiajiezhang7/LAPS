@@ -9,6 +9,7 @@ import numpy as np
 import torch
 from omegaconf import OmegaConf
 from torch.utils.data import ConcatDataset, DataLoader, RandomSampler, Subset
+from torch.utils.data._utils.collate import default_collate
 from tqdm import tqdm
 
 import wandb
@@ -68,6 +69,66 @@ def batch_to_device(batch, device):
                 batch[key] = batch_to_device(batch[key], device)
 
     return batch
+
+
+# Robust collate to guard against numpy scalar types and odd dtypes
+# This wraps default_collate after converting any np.generic scalars to Python scalars
+# and leaves ndarrays/tensors unchanged.
+def _to_python_scalars(x):
+    import numpy as _np
+    if isinstance(x, _np.generic):
+        return x.item()
+    elif isinstance(x, dict):
+        return {k: _to_python_scalars(v) for k, v in x.items()}
+    elif isinstance(x, (list, tuple)):
+        t = type(x)
+        return t(_to_python_scalars(v) for v in x)
+    else:
+        return x
+
+def safe_collate(batch):
+    # Prefer explicit stacking for numpy arrays to avoid PyTorch dtype inference issues.
+    # Assumes each element of batch is a dict with consistent keys and shapes.
+    import numpy as _np
+    import torch as _torch
+
+    # First, sanitize numpy scalars inside dicts/lists
+    batch = [_to_python_scalars(b) for b in batch]
+
+    if isinstance(batch[0], dict):
+        out = {}
+        keys = batch[0].keys()
+        for k in keys:
+            vals = [b[k] for b in batch]
+            v0 = vals[0]
+            if isinstance(v0, _np.ndarray):
+                try:
+                    arr = _np.stack(vals, axis=0)
+                except Exception:
+                    # fallback: ensure each is contiguous before stacking
+                    vals = [v.copy() for v in vals]
+                    arr = _np.stack(vals, axis=0)
+                # Use torch.tensor instead of from_numpy to avoid ABI/dtype issues
+                if arr.dtype.kind in ('f',):
+                    out[k] = _torch.tensor(arr, dtype=_torch.float32)
+                elif arr.dtype.kind in ('i','u'):
+                    out[k] = _torch.tensor(arr, dtype=_torch.int64)
+                elif arr.dtype.kind in ('b',):
+                    out[k] = _torch.tensor(arr, dtype=_torch.bool)
+                else:
+                    out[k] = _torch.tensor(arr)
+            elif _torch.is_tensor(v0):
+                out[k] = _torch.stack(vals, dim=0)
+            elif isinstance(v0, (list, tuple)):
+                # recursively collate lists/tuples
+                out[k] = default_collate(vals)
+            else:
+                # numbers/strings/etc.
+                out[k] = default_collate(vals)
+        return out
+    else:
+        # Fallback to default behavior
+        return default_collate(batch)
 
 
 def infinite_loader(dataloader):
@@ -346,6 +407,7 @@ def get_dataloaders(
                 sampler=sampler,
                 num_workers=num_workers,
                 persistent_workers=num_workers > 0,
+                collate_fn=safe_collate,
             )
 
     if val_dataset_concat_dict is not None:
@@ -362,6 +424,7 @@ def get_dataloaders(
                     sampler=sampler,
                     num_workers=int(num_workers > 0),  # set to 0 if num_workers is 0
                     persistent_workers=num_workers > 0,
+                    collate_fn=safe_collate,
                 )
     else:
         val_dataloader_dict = None

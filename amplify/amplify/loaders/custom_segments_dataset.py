@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 
 import h5py
+from h5py import h5s, h5t
 import numpy as np
 from einops import rearrange
 import cv2
@@ -248,11 +249,42 @@ class CustomSegmentsDataset(BaseDataset):
                 if 'tracks' not in grp:
                     continue
                 dset_tracks = grp['tracks']
-                # reinit: 取 [start_t] 这一窗
-                if self.reinit:
-                    tracks = dset_tracks[[start_t]]  # (1, horizon, N, 2)
-                else:
-                    tracks = dset_tracks[:, start_t:end_t]  # (T, ..., N, 2)
+                # reinit: 取 [start_t] 这一窗；若高层读取失败，回退低层 HDF5 读取
+                try:
+                    if self.reinit:
+                        tracks = dset_tracks[[start_t]]  # (1, horizon, N, 2)
+                    else:
+                        tracks = dset_tracks[:, start_t:end_t]  # (T, ..., N, 2)
+                except Exception:
+                    # Low-level fallback: read into preallocated float32 via HDF5 API
+                    dshape = tuple(dset_tracks.shape)
+                    if len(dshape) != 4:
+                        raise
+                    if self.reinit:
+                        file_start = (int(start_t), 0, 0, 0)
+                        file_count = (1, int(dshape[1]), int(dshape[2]), int(dshape[3]))
+                        mem_shape = file_count
+                    else:
+                        twin = max(0, int(end_t) - int(start_t))
+                        file_start = (0, int(start_t), 0, 0)
+                        file_count = (int(dshape[0]), twin, int(dshape[2]), int(dshape[3]))
+                        mem_shape = file_count
+                    # Prepare spaces
+                    file_space = dset_tracks.id.get_space()
+                    try:
+                        file_space.select_hyperslab(start=file_start, count=file_count)
+                    except TypeError:
+                        # Older h5py signature uses tuple positional args
+                        file_space.select_hyperslab(file_start, file_count)
+                    mem_space = h5s.create_simple(mem_shape)
+                    # Allocate destination
+                    tracks = np.empty(mem_shape, dtype=np.float32)
+                    # Read with explicit memory type to trigger on-the-fly conversion
+                    try:
+                        dset_tracks.id.read(mem_space, file_space, tracks, mtype=h5t.IEEE_F32LE)
+                    except TypeError:
+                        # h5py older versions may not support mtype kw; fallback without it
+                        dset_tracks.id.read(mem_space, file_space, tracks)
                 view_tracks.append(tracks)
 
                 # try to read stored resized image size for this view
@@ -266,10 +298,35 @@ class CustomSegmentsDataset(BaseDataset):
 
                 if 'vis' in grp:
                     dset_vis = grp['vis']
-                    if self.reinit:
-                        vis = dset_vis[[start_t]]  # (1, horizon, N)
-                    else:
-                        vis = dset_vis[:, start_t:end_t]
+                    try:
+                        if self.reinit:
+                            vis = dset_vis[[start_t]]  # (1, horizon, N)
+                        else:
+                            vis = dset_vis[:, start_t:end_t]
+                    except Exception:
+                        dshape_v = tuple(dset_vis.shape)
+                        if len(dshape_v) != 3:
+                            raise
+                        if self.reinit:
+                            file_start_v = (int(start_t), 0, 0)
+                            file_count_v = (1, int(dshape_v[1]), int(dshape_v[2]))
+                            mem_shape_v = file_count_v
+                        else:
+                            twin = max(0, int(end_t) - int(start_t))
+                            file_start_v = (0, int(start_t), 0)
+                            file_count_v = (int(dshape_v[0]), twin, int(dshape_v[2]))
+                            mem_shape_v = file_count_v
+                        file_space_v = dset_vis.id.get_space()
+                        try:
+                            file_space_v.select_hyperslab(start=file_start_v, count=file_count_v)
+                        except TypeError:
+                            file_space_v.select_hyperslab(file_start_v, file_count_v)
+                        mem_space_v = h5s.create_simple(mem_shape_v)
+                        vis = np.empty(mem_shape_v, dtype=np.float32)
+                        try:
+                            dset_vis.id.read(mem_space_v, file_space_v, vis, mtype=h5t.IEEE_F32LE)
+                        except TypeError:
+                            dset_vis.id.read(mem_space_v, file_space_v, vis)
                     view_vis.append(vis)
 
             if len(view_tracks) == 0:

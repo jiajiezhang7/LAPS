@@ -59,7 +59,9 @@ def tracks_from_video(
 
     with torch.inference_mode():
         # Initialize video and query layout for cotracker
-        video_t = torch.from_numpy(video).float()
+        # NOTE: Use torch.tensor(...) instead of from_numpy to avoid fragile
+        # NumPy/PyTorch ABI/type mismatches observed in some conda envs.
+        video_t = torch.tensor(video, dtype=torch.float32)
         if device.type == "cuda":
             # Pin host memory to accelerate H2D transfer; use non_blocking copy
             video = video_t.pin_memory().to(device, non_blocking=True)
