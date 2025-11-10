@@ -70,9 +70,9 @@
     cond_cameraviews=[default] \
     keys_to_load=[tracks,images] \
     true_horizon=16 track_pred_horizon=16 \
-    batch_size=8 gpu_max_bs=8 num_epochs=5 \
+    batch_size=8 gpu_max_bs=8 num_epochs=2 \
     quick=false num_workers=4 log_interval=8 \
-    resume=false run_name=epochs5_complete500_d02_m10 \
+    resume=false run_name=epochs2_complete500_d02_m10 \
     use_wandb=true lr_schedule=null
 
 #### CoTracker可视化

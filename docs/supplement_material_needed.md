@@ -1,127 +1,157 @@
-# 论文补充材料 (Supplementary Materials) 实验计划
+这是一个非常好的问题，对实验计划进行分类是高效执行的关键。作为你的“ActionPaper-Writer”，我来帮你详细拆解。
 
-## 1. 核心方法论详情 (Methodology Details)
+你这份实验计划中，大部分图表（Figures）都是**代码实验**的直接产出，而表格（Tables）和少数示意图则属于**人工整理**或**收集**。
 
-### 1.1. 实验 1：Motion Tokenizer ($M_{\theta}$) 架构与训练
-
-* **目标：** 详细阐明 Motion Tokenizer 的架构 与训练细节，支撑正文 3.1 节，兑现“详见补充材料”的承诺，增强可复现性。
-* **产出图表：**
-    * **`Figure S1: Motion Tokenizer 详细架构图`**
-        * **内容：** 绘制一幅包含 $E_{\theta}$ (Encoder), $D_{\theta}$ (Decoder), 以及 FSQ (Finite Scalar Quantization) 层的详细流程图。
-        * **标注：** 明确标出输入（Keypoint Velocities $\in \mathbb{R}^{T \times N \times 2}$）和输出（Discrete Tokens $z_t$ 和 Relative Displacement Predictions）。
-    * **`Figure S2: Motion Tokenizer 训练损失曲线`**
-        * **内容：** 绘制训练过程中的损失函数（Cross-Entropy Loss）随 Epochs/Steps 下降的曲线。
-        * **目的：** 证明 $M_{\theta}$ 已稳定收敛。
-    * **`Table S1: Motion Tokenizer 训练超参数`**
-        * **内容：** 列出所有用于复现 $M_{\theta}$ 的关键超参数。
-        * **行条目：**
-            * Keypoint Tracker (e.g., CoTracker)
-            * Encoder ($E_{\theta}$) 架构 (e.g., Transformer 层数, 头数)
-            * Decoder ($D_{\theta}$) 架构
-            * FSQ 码本参数 (e.g., levels, dimensions)
-            * 训练数据集 ($\mathcal{D}_{clips}$) 来源
-            * Batch Size
-            * Learning Rate
-            * Optimizer
-            * 训练总 Epochs
-
-### 1.2. 实验 2：Action Segmentor 阈值无监督优化
-
-* **目标：** 详细展示 $\theta_{on}$ 是如何通过一个**自动化、无监督**的过程 标定出来的，用数据证明其鲁棒性，支撑正文 3.2.2 节。
-* **产出图表：**
-    * **`Figure S3: 代理信号 (Proxy Signal) 可视化`**
-        * **内容：** 在一个典型的视频片段上，同时绘制：
-            1.  低级“速度能量”（Proxy Signal，例如关键点速度的时间差分范数）。
-            2.  Otsu法 或分位数法生成的二元伪标签 $y_{pseudo}$。
-            3.  我们的高级 $E_{action}$ 信号。
-        * **目的：** 直观展示我们如何用一个简单的信号 来标定一个更鲁棒的高级信号。
-    * **`Figure S4: $\theta_{on}$ 参数扫描曲线`**
-        * **内容：** 绘制 F1-score (或 Youden's J index) 作为 $E_{action}$ 阈值 $\theta_{on}$ 的函数曲线。
-        * **目的：** 证明我们选择的 $\theta_{on}$ 是最优或接近最优的，并且该曲线在最优点附近相对平稳（即鲁棒）。
-    * **`Figure S5: Hysteresis 与 Debounce 敏感性分析`**
-        * **内容：**
-            1.  固定最优的 $\theta_{on}$，绘制分割 F1-score (对比 GT) 随 $\theta_{off}$ 比例 $r$ ($\theta_{off} = r \cdot \theta_{on}$) 变化的曲线。
-            2.  固定最优的 $\theta_{on}, \theta_{off}$，绘制 F1-score 随 debounce 时长 $u$ 和 $d$ 变化的曲线。
-        * **目的：** 证明 Segmentor 对这些次要超参数不敏感，具有工业部署的稳定性。
-
-### 1.3. 实验 3：Frozen Transformer 嵌入模型超参数搜索
-
-* **目标：** 用实验数据支撑正文 3.3.1 节中对模型架构 ($L=4, H=4$) 和池化方式 (Mean-Pooling) 的选择。
-* **产出图表：**
-    * **`Table S2: 不同池化 (Pooling) 策略对聚类质量的影响`**
-        * **内容：** 固定 $L=4, H=4$，比较不同池化策略对聚类指标的影响。
-        * **列条目：** Embedding Method | Silhouette Score | Calinski-Harabasz Index
-        * **行条目：**
-            1.  Mean Pooling (Ours)
-            2.  CLS Token Pooling
-            3.  Max Pooling
-            4.  Attention Pooling
-    * **`Table S3: 不同 Transformer 架构对聚类质量的影响`**
-        * **内容：** 固定 Mean-Pooling，比较不同架构参数（$L, H$）对聚类指标的影响。
-        * **列条目：** L (Layers) | H (Heads) | $d$ (Dimension) | Silhouette Score | Calinski-Harabasz Index
-        * **行条目：** (展示不同的组合，并高亮我们的选择: 4, 4, 256)
+我已将你的计划重组为两个独立的部分：
+1.  **A部分：代码实验执行计划**（需要你编写并运行代码来生成数据和图表）。
+2.  **B部分：人工整理与收集**（你需要手动制图、截图、或汇总已知信息）。
 
 ---
 
-## 2. 实验结果的充分补充 (Extended Results)
+# A部分：代码实验执行计划（Code-Driven Experiments）
 
-### 2.1. 实验 4：海量定性分割结果 (Extensive Qualitative Segmentation)
+这部分是核心工作，所有产出都依赖于你编写的Python脚本（例如，使用 `PyTorch`, `Matplotlib`, `scikit-learn` 等）。
 
-* **目标：** 提供““海量””视觉证据，证明 $E_{action}$ 信号 相较于 Optical Flow 的**普遍优越性**，以及我们 Action Segmentor 的高精度。
-* **产出图表：**
-    * **`Figure S6 - S10: 更多长时序分割对比图`** (至少 5 张新图)
-        * **内容：** 复制正文 Figure 4 的格式，但使用**不同**的、更长的（例如 60-90 秒）视频片段。
-        * **每张图包含 4 条线：**
-            1.  `Optical Flow Magnitude` (Baseline)
-            2.  `Ours ($E_{action}$)` (Quantized)
-            3.  `GT Action Boundaries` (Dashed Lines)
-            4.  `Our Segmentor Output` (ON/OFF State)
-        * **目的：** 穷举式地证明我们的信号在各种情况下都更清晰、更准确地捕捉了**语义边界**。
-    * **`Figure S11: 失败案例 (Failure Cases) 分析`**
-        * **内容：** 诚实地展示 1-2 个我们的方法失败或表现不佳的案例。
-        * **示例：**
-            * *漏检 (Missed Detection)*：一个非常细微的动作（如擦拭），其 $E_{action}$ 没能超过 $\theta_{on}$。
-            * *错误分割 (False Positive)*：一个非任务相关的动作（如工人身体大幅晃动），意外触发了分割。
-        * **目的：** 提升学术诚信，并为 4.6 节（局限性讨论）提供素材。
+## 1. 实验 1.1：Motion Tokenizer 训练 (产出 Fig. S2)
 
-### 2.2. 实验 5：聚类结果的定性可视化 (Qualitative Clustering Visualization)
+* **目标：** 证明 $M_{\theta}$ 训练收敛。
+* **产出：** `Figure S2: Motion Tokenizer 训练损失曲线`
+* **技术实现细节：**
+    1.  运行 $M_{\theta}$ 的训练脚本。
+    2.  确保训练过程中记录了每个 epoch 或 step 的 `Cross-Entropy Loss`（例如，使用 `wandb`, `TensorBoard`, 或简单的 CSV 日志）。
+    3.  **可视化脚本 (`plot_loss_curve.py`)：**
+        * 读取损失日志文件。
+        * 使用 `matplotlib` 绘制损失随训练（Epochs/Steps）下降的曲线。
+        * 添加图例、x/y轴标签，并保存为高分辨率图像（如 `.pdf` 或 `.png`）。
 
-* **目标：** **直观地证明** K-Means 发现的聚类 具有高度的**语义一致性**，为正文 Figure 5 的抽象 UMAP 点云提供““具象””的证据。
-* **产出图表：**
-    * **`Figure S12: 动作聚类 0 (Cluster 0) 示例`**
-        * **内容：** 一个 3x3 或 4x4 的**视频缩略图网格**。
-        * **采样：** 从 K-Means 赋给 Cluster 0 的所有动作原语 $A_i$ 中，随机采样 9 或 16 个。
-        * **展示：** 每个采样 $A_i$ 展示 3 帧（起始帧、中间帧、结束帧）。
-        * **图注 (Caption)：** 必须明确指出该聚类对应的语义。（例如："Figure S12: ... 随机采样自 Cluster 0。该聚类清晰地对应于‘**拿起电动螺丝刀**’这一语义动作。"）
-    * **`Figure S13: 动作聚类 1 (Cluster 1) 示例`**
-        * **内容：** 同上，但采样自 Cluster 1。
-        * **图注：** （例如："... 对应于‘**拧紧外壳螺丝**’这一语义动作。"）
-    * **`Figure S14: 动作聚类 2 (Cluster 2) 示例`**
-        * **内容：** 同上，但采样自 Cluster 2。
-        * **图注：** （例如："... 对应于‘**放置成品电机**’这一语义动作。"）
-    * **(依此类推，直到 Cluster K-1)**
+## 2. 实验 1.2：Action Segmentor 阈值优化 (产出 Fig. S3, S4, S5)
+
+* **目标：** 详细展示 $\theta_{on}$ 的无监督标定过程及其鲁棒性。
+* **产出：**
+    * `Figure S3: 代理信号 (Proxy Signal) 可视化`
+    * `Figure S4: $\theta_{on}$ 参数扫描曲线`
+    * `Figure S5: Hysteresis 与 Debounce 敏感性分析`
+* **技术实现细节：**
+    1.  **`Figure S3` (可视化脚本 `plot_proxy_vs_e_action.py`)：**
+        * 加载一个典型的验证视频片段。
+        * 计算低级“速度能量”（Proxy Signal），例如：`torch.norm(keypoint_velocities[:, 1:] - keypoint_velocities[:, :-1], dim=-1)`。
+        * 使用 `skimage.filters.threshold_otsu` 或 `np.quantile` 从代理信号生成 $y_{pseudo}$。
+        * 通过 $M_{\theta}$ 计算我们的 $E_{action}$ 信号。
+        * 在同一张图上绘制这三条时间序列曲线。
+    2.  **`Figure S4` (扫描脚本 `sweep_theta_on.py`)：**
+        * 加载验证集的所有 $E_{action}$ 信号和 $y_{pseudo}$ 标签。
+        * 定义一个 $\theta_{on}$ 的扫描范围（例如 `np.linspace(0.1, 1.0, 50)`）。
+        * **循环体：**
+            * 对于每个 `theta` 值，计算 $E_{action} > theta$ 得到的 $y_{pred}$。
+            * 计算 `f1_score(y_pseudo, y_pred)` 或 `j_index = recall + specificity - 1`。
+        * 绘制 F1-score/J-Index 随 $\theta_{on}$ 变化的曲线，找到峰值。
+    3.  **`Figure S5` (敏感性分析脚本 `analyze_sensitivity.py`)：**
+        * 加载**测试集**的 $E_{action}$ 信号和**Ground Truth (GT)** 标注。
+        * 固定从 `Fig S4` 得到的**最优 $\theta_{on}$**。
+        * **实验a (Hysteresis)：** 循环遍历 $r$（例如 `np.linspace(0.1, 1.0, 20)`），计算 $\theta_{off} = r \cdot \theta_{on}$，运行完整的 Action Segmentor（带 hysteresis 逻辑），并计算 F1-score (对比 **GT**)。绘制 F1 随 $r$ 变化的曲线。
+        * **实验b (Debounce)：** 固定最优的 $\theta_{on}, \theta_{off}$，循环遍历 $u$ 和 $d$ 的不同组合（例如 `[1, 3, 5, 7]` 帧），计算 F1-score (对比 **GT**)。绘制 F1 随 $u, d$ 变化的曲线（或热图）。
+
+## 3. 实验 1.3：Frozen Transformer 超参数搜索 (产出 Table S2, S3 的数据)
+
+* **目标：** 为我们对池化策略和模型架构的选择提供数据支撑。
+* **产出：** `Table S2` 和 `Table S3` 中的所有**数值**（表格本身在B部分整理）。
+* **技术实现细节：**
+    1.  **前置步骤：** 运行 Action Segmentor，保存所有分割出的动作原语（`A_i`）及其对应的 $S_{q,i}$（连续量化向量序列）。
+    2.  **主脚本 (`run_clustering_ablation.py`)：**
+        * 加载所有 $S_{q,i}$。
+        * **实验a (池化策略)：**
+            * 固定 $L=4, H=4, d=256$。
+            * 循环遍历 `pooling_strategy = ['mean', 'cls', 'max', 'attention']`。
+            * 对于每种策略，通过 Frozen Transformer 编码器得到所有原语的嵌入 $e_i$。
+            * 运行 `KMeans(n_clusters=K)`。
+            * 计算 `silhouette_score(embeddings, labels)` 和 `calinski_harabasz_score(embeddings, labels)`。
+            * 打印结果。
+        * **实验b (架构)：**
+            * 固定 `pooling_strategy = 'mean'`。
+            * 循环遍历不同的架构组合 `(L, H, d)`（例如 `(2,2,128), (4,4,128), (4,4,256), ...`）。
+            * 重复上述的嵌入、KMeans、计算指标的步骤。
+            * 打印结果。
+
+## 4. 实验 2.1：海量定性分割结果 (产出 Fig. S6 - S11)
+
+* **目标：** 提供压倒性的视觉证据，证明 $E_{action}$ 优于光流。
+* **产出：**
+    * `Figure S6 - S10: 更多长时序分割对比图`
+    * `Figure S11: 失败案例 (Failure Cases) 分析`
+* **技术实现细节：**
+    1.  **核心可视化脚本 (`plot_qualitative_segmentation.py`)：**
+        * **输入：** 一个视频片段的ID（或时间戳）。
+        * **加载数据：**
+            * 加载对应的视频帧。
+            * 加载 Ground Truth (GT) 标注文件，在图上绘制为**虚线**。
+        * **计算信号（在线）：**
+            1.  计算 `Optical Flow Magnitude` (Baseline)，绘制为**红线**。
+            2.  计算 `Ours ($E_{action}$)` (Quantized)，绘制为**蓝线**。
+            3.  运行 `Our Segmentor Output` (完整的Hysteresis状态机)，绘制为**黑色阶梯线** (ON/OFF State)。
+        * **绘图：** 使用 `matplotlib.pyplot` 将所有 4-5 条数据（GT, Flow, $E_{action}$, Output）绘制在同一张时序图上。
+    2.  **执行：** 运行此脚本 5-7 次，精心挑选能展示 $E_{action}$ 优越性（S6-S10）和局限性（S11）的片段。
+
+## 5. 实验 2.2：聚类结果的定性可视化 (产出 Fig. S12 - S14)
+
+* **目标：** 具象化地展示 K-Means 聚类的语义一致性。
+* **产出：** `Figure S12, S13, S14: 动作聚类 示例`
+* **技术实现细节：**
+    1.  **前置步骤：** 运行实验 1.3，得到所有动作原语 $A_i$ 最终的 K-Means 聚类标签 `cluster_id`。
+    2.  **可视化脚本 (`visualize_clusters.py`)：**
+        * **输入：** `Cluster_ID` (例如 0, 1, 2, ... K-1)。
+        * **逻辑：**
+            * 筛选出所有 `cluster_id == K` 的动作原语 $A_i$（即它们的视频路径/时间戳）。
+            * 从该列表中**随机采样** 9 或 16 个 $A_i$。
+            * 创建一个 3x3 或 4x4 的 `matplotlib` 子图网格。
+            * **循环体：** 对于每个采样的 $A_i$，加载其视频，提取**起始帧**、**中间帧**、**结束帧**。
+            * 将这三帧（或只显示中间帧）绘制到子图网格的对应位置。
+        * **执行：** 为 $K=0, 1, 2, ...$ 分别运行此脚本，生成 `Fig S12` 到 `Fig S14+`。
 
 ---
 
-## 3. 数据集与讨论的扩展 (Dataset & Discussion)
+# B部分：人工整理与收集（Manually Compiled & Collected Items）
 
-### 3.1. 实验 6：数据集详情与标注规范
+这部分内容不需要新的代码实验，而是依赖于你的绘图、截图、以及对已知实验配置和数据信息的““转录””。
 
-* **目标：** 详细介绍我们的真实工业数据集，证明其““真实性””和““复杂性””，并说明用于评估的 Ground-Truth 的高质量。
-* **产出图表：**
-    * **`Figure S15: 工业装配工位设置`**
-        * **内容：**
-            1.  工位现场照片。
-            2.  `Top-down View` 的示例帧。
-            3.  `Exocentric View` 的示例帧。
-        * **目的：** 让审稿人直观理解我们的数据采集环境。
-    * **`Table S4: 数据集与标注详情`**
-        * **内容：** 汇总数据集的关键信息。
-        * **行条目：**
-            * 数据集总时长 (e.g., ~100 hours)
-            * 测试集时长 (e.g., ~2 hours)
-            * 视频分辨率 / FPS
-            * 工位“可数”动作词汇表 (e.g., K=3: 'Pick Screwdriver', 'Fasten Screw', 'Wipe Casing')
-            * 标注工具 (e.g., ELAN, VGG-VIA)
-            * 标注者间一致性 (Inter-Annotator Agreement) (e.g., F1@5s, mAP@0.5)
-        * **目的：** 证明我们用于评估（表1）的 GT 是可靠且高质量的。
+## 1. 实验 1.1：Motion Tokenizer (产出 Fig. S1, Table S1)
+
+* **`Figure S1: Motion Tokenizer 详细架构图`**
+    * **类型：** **人工绘制**。
+    * **工具：** 使用 TikZ (for LaTeX), PowerPoint, draw.io 或你熟悉的任何绘图工具。
+    * **内容：** 根据你已实现的代码架构，绘制包含 $E_{\theta}, D_{\theta}, \text{FSQ}$ 的流程图，并仔细标注输入输出的张量维度（如 $\mathbb{R}^{T \times N \times 2}$）。
+* **`Table S1: Motion Tokenizer 训练超参数`**
+    * **类型：** **人工整理**。
+    * **内容：** 打开你的训练配置文件（例如 `config.yaml` 或 `train.py`），将你最终使用的**所有超参数**（层数、头数、Batch Size、LR等）手动复制粘贴到 LaTeX 的 `\begin{tabular}` 环境中。
+
+## 2. 实验 1.3：Frozen Transformer (产出 Table S2, S3)
+
+* **`Table S2: 不同池化 (Pooling) 策略对聚类质量的影响`**
+* **`Table S3: 不同 Transformer 架构对聚类质量的影响`**
+    * **类型：** **人工整理**。
+    * **内容：** 从**A部分 - 实验 1.3** 的脚本运行**输出**（终端打印或日志文件）中，**手动复制** `Silhouette Score` 和 `Calinski-Harabasz Index` 的数值，填写到 LaTeX 表格中。
+
+## 3. 实验 3.1：数据集详情 (产出 Fig. S15, Table S4)
+
+* **`Figure S15: 工业装配工位设置`**
+    * **类型：** **人工收集与排版**。
+    * **内容：**
+        1.  从实验室或数据提供方获取一张工位的**真实现场照片**。
+        2.  从你的数据集中截取 2 张有代表性的示例帧（`Top-down View` 和 `Exocentric View`）。
+        3.  使用 PowerPoint 或 `matplotlib` 将这 3 张图(a, b, c)拼排在一起。
+* **`Table S4: 数据集与标注详情`**
+    * **类型：** **人工整理**。
+    * **内容：** 整理关于数据集的**已知事实**并填入表格。
+    * **信息来源：**
+        * `数据集总时长`, `分辨率/FPS`：来自数据提供方或 `ffprobe`。
+        * `测试集时长`, `可数动作词汇表`：来自你的 GT 标注文件。
+        * `标注工具`：(e.g., ELAN) 你在标注时使用的工具。
+        * `标注者间一致性`：这个**数值** (e.g., F1@5s) 本身可能来自一个你**过去**运行过的脚本（比较两个标注者的 `.eaf` 文件），但现在你只是**引用**这个已知结果，并将其**手动填入**表格。
+
+---
+
+### 总结
+
+* **立即开始A部分：** 这部分是工作量的核心，需要你集中时间编写和运行脚本。
+* **并行处理B部分：** 在A部分代码运行的间隙（例如模型训练时），你可以去完成B部分的绘图和表格整理工作。
+
+这个拆分后的计划应该非常清晰了。请按照这个蓝图执行，特别是A部分的实现细节，这将确保我们补充材料的质量。
