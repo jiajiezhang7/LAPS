@@ -2,7 +2,7 @@
 # All commands will run under conda env "laps"
 
 # Motion Tokenizer checkpoint (will be produced after training)
-checkpoint_path: "/home/johnny/action_ws/checkpoints/motion_tokenizer/epochs10_gtea_split1_m10/best.pt"
+checkpoint_path: "/home/johnny/action_ws/checkpoints/motion_tokenizer/epochs10_gtea_split1_m10_tracks_only/best.pt"
 
 # Decoder window size (used for velocity normalization); keep in sync with training img_shape shorter side
 decoder_window_size: 480

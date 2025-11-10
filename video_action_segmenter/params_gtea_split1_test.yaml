@@ -2,7 +2,7 @@
 # All commands will run under conda env "laps"
 
 # Motion Tokenizer checkpoint (produced after training)
-checkpoint_path: "/home/johnny/action_ws/checkpoints/motion_tokenizer/epochs10_gtea_split1_m10/best.pt"
+checkpoint_path: "/home/johnny/action_ws/checkpoints/motion_tokenizer/epochs10_gtea_split1_m10_tracks_only/best.pt"
 
 decoder_window_size: 480
 
@@ -16,7 +16,7 @@ auth: {}
 # Input: full Videos folder (or restrict to test list externally)
 input:
   type: "folder"
-  dir: "/home/johnny/action_ws/online_datasets/gtea/gtea/Videos"
+  dir: "/home/johnny/action_ws/online_datasets/gtea/gtea/Videos_test.split1"
   video_exts: [".mp4", ".mov", ".avi", ".mkv"]
   recursive: true
   eof_timeout_seconds: 1.0

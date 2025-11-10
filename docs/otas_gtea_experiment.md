@@ -50,6 +50,41 @@
     - GTEA_GTEA_S1_Tea_C1: 2009
   - video_info.pkl 条目：7（键均为 ../data/gtea/videos/GTEA/GTEA/GTEA_{stem}.mp4）
 
+## 步骤 4：配置 OTAS 实验（训练数据准备完成）
+- 训练集清单：online_datasets/gtea/gtea/splits/train.split1.bundle（21 段）
+- 已复制训练视频：21 段 → /home/johnny/action_ws/comapred_algorithm/OTAS/data/gtea/videos/GTEA/GTEA/GTEA_{stem}.mp4
+- 抽帧与统计（otas）：对训练+测试共 28 段执行并更新 video_info.pkl
+- 完整性验证：
+  - 帧目录总数：28（GTEA_GTEA_{stem}）
+  - video_info.pkl 条目：28
+  - video_info_train.pkl 条目：21
+  - video_info_test.pkl 条目：7
+- 关键命令（复制训练视频）：
+```bash
+WS_ROOT=/home/johnny/action_ws
+DST_BASE=$WS_ROOT/comapred_algorithm/OTAS/data/gtea
+SRC_DIR=$WS_ROOT/online_datasets/gtea/gtea/Videos_train.split1
+BUNDLE=$WS_ROOT/online_datasets/gtea/gtea/splits/train.split1.bundle
+mkdir -p "$DST_BASE/videos/GTEA/GTEA" "$DST_BASE/frames"
+while IFS= read -r line; do
+  [[ -z "$line" ]] && continue
+  stem="${line%.txt}"
+  cp -f "$SRC_DIR/${stem}.mp4" "$DST_BASE/videos/GTEA/GTEA/GTEA_${stem}.mp4"
+done < "$BUNDLE"
+```
+- 关键命令（抽帧与更新 video_info.pkl）：
+```bash
+cd /home/johnny/action_ws/comapred_algorithm/OTAS/code
+conda run -n otas python video_info.py \
+  --video-path ../data/gtea/videos \
+  --frame-path ../data/gtea/frames \
+  --video-info-file ../data/gtea/video_info.pkl \
+  --dataset BF
+```
+- 备注：为严格遵循“仅在 train.split1 上训练”，额外派生了：
+  - /home/johnny/action_ws/comapred_algorithm/OTAS/data/gtea/video_info_train.pkl（仅 21 段训练集）
+  - /home/johnny/action_ws/comapred_algorithm/OTAS/data/gtea/video_info_test.pkl（仅 7 段测试集）
+
 ---
 
 ## 关键产物与路径（已更新）
@@ -57,7 +92,9 @@
 - 数据根：/home/johnny/action_ws/comapred_algorithm/OTAS/data/gtea
   - videos/GTEA/GTEA/GTEA_{stem}.mp4（已复制的 MP4 文件）
   - frames/GTEA_GTEA_{stem}/Frame_%06d.jpg（抽帧输出）
-  - video_info.pkl（抽帧统计信息）
+  - video_info.pkl（抽帧统计信息，train+test 共 28）
+  - video_info_train.pkl（仅 train.split1，共 21）
+  - video_info_test.pkl（仅 test.split1，共 7）
 
 ## 已执行命令与日志摘要
 - 复制测试视频：
@@ -107,6 +144,65 @@ conda run -n laps python /home/johnny/action_ws/tools/eval_segmentation.py \
 ```
 
 ---
+## 步骤 5：运行 OTAS 算法（验证→边界检测→结果适配）
+- 验证（conda: otas）：
+```bash
+cd /home/johnny/action_ws/comapred_algorithm/OTAS/code
+conda run -n otas python main.py \
+  --video-path ../data/gtea/videos \
+  --frame-path ../data/gtea/frames \
+  --video-info-file ../data/gtea/video_info_test.pkl \
+  --dataset BF --feature_model tf \
+  --mode val \
+  --batch_size 16 --num_workers 8 \
+  --output-path ../output/ \
+  --pretrain ../output/OTAS/BF_tf/model/lr_0.0001_best.pth.tar \
+  --gpu 0 --num-gpus 1
+```
+  - 说明：首次运行因存在训练阶段缓存 window_lists，写出了训练（S2/S3/S4）mean_error，共 21 个；已清理缓存目录 OTAS/BF_tf/window_lists 后重跑，仅生成测试 7 个。
+  - 结果：mean_error 目录共 7 个（S1_*），示例：
+    - /home/johnny/action_ws/comapred_algorithm/OTAS/output/OTAS/BF_tf/mean_error/GTEA_GTEA_S1_Cheese_C1.pkl
+
+- 边界检测（conda: laps）：
+```bash
+cd /home/johnny/action_ws/comapred_algorithm/OTAS/code
+conda run -n laps python detect_bdy.py \
+  --dataset BF --feature_model tf \
+  --output-path ../output/ \
+  --order 15 --ds 3 --seq_len 5
+```
+  - 结果：detect_seg 目录共 7 个，示例：
+    - /home/johnny/action_ws/comapred_algorithm/OTAS/output/OTAS/BF_tf/detect_seg/GTEA_GTEA_S1_Cheese_C1.pkl
+
+- 结果适配（conda: laps）：
+```bash
+PRED_ROOT=/home/johnny/action_ws/comapred_algorithm/OTAS/output/OTAS/BF_tf
+RAW_DIR=/home/johnny/action_ws/online_datasets/gtea/gtea/Videos_test.split1
+OUT_DIR=/home/johnny/action_ws/datasets/output/segmentation_outputs/GTEA_split1_OTAS
+conda run -n laps python /home/johnny/action_ws/tools/adapt_otas_to_segments_gtea.py \
+  --otas-pred "$PRED_ROOT" --raw-dir "$RAW_DIR" --output "$OUT_DIR"
+```
+  - 结果：segments.json 共 7 个，示例：
+    - /home/johnny/action_ws/datasets/output/segmentation_outputs/GTEA_split1_OTAS/S1_Cheese_C1/segmented_videos/S1_Cheese_C1_segments.json
+
+## 步骤 6：评估性能指标（laps）
+```bash
+PRED_ROOT=/home/johnny/action_ws/datasets/output/segmentation_outputs/GTEA_split1_OTAS
+GT_DIR=/home/johnny/action_ws/online_datasets/gtea/gt_segments_json/test.split1
+OUT_JSON=/home/johnny/action_ws/datasets/output/stats/seg_eval/seg_eval_GTEA_split1_OTAS.json
+conda run -n laps python /home/johnny/action_ws/tools/eval_segmentation.py \
+  --pred-root "$PRED_ROOT" \
+  --gt-dir "$GT_DIR" \
+  --iou-thrs 0.5 0.75 \
+  --tolerance-secs 2.0 5.0 \
+  --output "$OUT_JSON"
+```
+- 评估结果（summary）：
+  - F1@2s = 0.3690
+  - F1@5s = 0.3768
+  - mAP@0.5 = 0.0866
+  - mAP@0.75 = 0.0175
+
 
 ## 备注
 - conda 环境：

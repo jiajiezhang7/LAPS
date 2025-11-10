@@ -11,11 +11,11 @@
 - [x] 3. 转换 GT（train/test → 段 JSON 秒）
 - [x] 4. 预处理训练视频（CoTracker → HDF5）
 - [x] 4.5 HDF5 读取问题诊断与修复（读侧低层回退）
-- [ ] 5. 训练 Motion Tokenizer（FSQ 码本）
-- [ ] 6. 提取训练集能量（JSONL）
-- [ ] 7. 基于训练 GT 搜索最佳阈值（F1@2s）
-- [ ] 8. 测试集推理与分割（使用最佳阈值）
-- [ ] 9. 评估（F1@2s、F1@5s）
+- [x] 5. 训练 Motion Tokenizer（FSQ 码本）
+- [x] 6. 提取训练集能量（JSONL）
+- [x] 7. 基于训练 GT 搜索最佳阈值（F1@2s）
+- [x] 8. 测试集推理与分割（使用最佳阈值）
+- [x] 9. 评估（F1@2s、F1@5s）
 
 ## 里程碑与产出路径
 - 预处理输出（HDF5）：/home/johnny/action_ws/data/preprocessed_gtea_m10/split1
@@ -185,3 +185,117 @@
     2) 显式 `video_root=null`（避免被默认配置覆盖为非空路径）；
     3) `log_interval=200` 保持，减少可视化频率。
   - 预期速度：从 ~0.86 s/step（tracks+images/黑图占位）降至 ~0.04–0.08 s/step（tracks-only），约 10–20× 加速；验证阶段步时同步下降。
+
+
+
+---
+
+- 2025-11-11 02:20: Step 7–9 执行与结果（方案B：基于训练GT阈值搜索）
+
+### Step 7 阈值搜索（已完成）
+- 输出路径：/home/johnny/action_ws/output/gtea/thresholds/split1/best_threshold_quantized_token_diff.json
+- 关键结果：thr=0.0, F1_mean=0.4016, Precision_mean=0.8749, Recall_mean=0.2668
+- 执行命令：
+  ```bash
+  conda run -n laps python tools/threshold_search_with_gt.py \
+    --view D01 \
+    --energy-root /home/johnny/action_ws/output/gtea \
+    --gt-dir /home/johnny/action_ws/online_datasets/gtea/gt_segments_json/train.split1 \
+    --source quantized --mode token_diff_l2_mean \
+    --target-fps 10 --stride 4 \
+    --hysteresis-ratio 0.95 --up-count 2 --down-count 2 \
+    --cooldown-windows 1 --max-duration-seconds 2.0 \
+    --tolerance-sec 2.0 \
+    --output /home/johnny/action_ws/output/gtea/thresholds/split1/best_threshold_quantized_token_diff.json
+  ```
+- 注意事项：训练能量文件的实际结构为 `/home/johnny/action_ws/output/gtea/{video_stem}/energy_split1`（文件名为 `energy_split1`）。脚本默认查找 `{energy_root}/{stem}/stream_energy_quantized_token_diff_l2_mean.jsonl`，已在每个 `{stem}` 目录创建符号链接 `stream_energy_quantized_token_diff_l2_mean.jsonl -> energy_split1` 以兼容脚本。
+
+### Step 8 测试集分割（已完成）
+- 输出路径：`/home/johnny/action_ws/output/gtea/segments_split1/{video_stem}/segmented_videos/{video_stem}_segments.json`
+- 测试视频数量：7 个
+  - S1_Cheese_C1, S1_Coffee_C1, S1_CofHoney_C1, S1_Hotdog_C1, S1_Pealate_C1, S1_Peanut_C1, S1_Tea_C1
+- 配置修改：`video_action_segmenter/params_gtea_split1_test.yaml` 中 `input.dir` 改为 `/home/johnny/action_ws/online_datasets/gtea/gtea/Videos_test.split1`
+- 执行命令：
+  ```bash
+  conda run -n laps python -m video_action_segmenter.stream_inference \
+    --params video_action_segmenter/params_gtea_split1_test.yaml
+  ```
+
+### Step 9 评估（已完成）
+- 输出路径：/home/johnny/action_ws/output/gtea/stats/seg_eval_split1.json
+- 评估指标（汇总）：
+  - F1@2s = 0.6008
+  - F1@5s = 0.7173
+  - mAP@0.5 = 0.0920
+  - mAP@0.75 = 0.0041
+- 执行命令：
+  ```bash
+  conda run -n laps python tools/eval_segmentation.py \
+    --pred-root /home/johnny/action_ws/output/gtea/segments_split1 \
+    --gt-dir /home/johnny/action_ws/online_datasets/gtea/gt_segments_json/test.split1 \
+    --iou-thrs 0.5 0.75 --tolerance-sec 2.0 --tolerance-secs 5.0 \
+    --output /home/johnny/action_ws/output/gtea/stats/seg_eval_split1.json
+  ```
+- 评估脚本输出（摘要）：
+  ```json
+  {"summary": {"num_videos": 7, "F1@2.0s_mean": 0.6008172140705382, "Precision@2.0s_mean": 0.5808637710411036, "Recall@2.0s_mean": 0.650293056616586, "F1@5.0s_mean": 0.7172847421904588, "Precision@5.0s_mean": 0.6934365045396351, "Recall@5.0s_mean": 0.7765333709241272, "mAP@0.5": 0.09195867336805284, "mAP@0.75": 0.004127212618910809 }}
+  ```
+
+### 备注与观察
+- 阈值搜索的最佳阈值为 0.0，结合 `max_duration=2s` 与冷却窗口，召回得到较大提升；在测试集上 F1@2s=0.6008，F1@5s=0.7173。
+- mAP 在 0.5/0.75 IoU 下分别为 ~0.092/~0.004，说明段定位（IoU）还有提升空间，后续可考虑：
+  1) 细化状态机（如自适应持续时间上限、冷却时间）；
+  2) 能量平滑或多尺度能量融合；
+  3) 在训练侧做留一或交叉验证式阈值选择以提升泛化稳健性。
+
+
+### Step 10 训练集离线分割（已完成）
+- 输出路径（预测根）：`/home/johnny/action_ws/output/gtea/segments_train_split1/{video_stem}/segmented_videos/{video_stem}_segments.json`
+- 输入能量：`/home/johnny/action_ws/output/gtea/{video_stem}/(stream_energy_quantized_token_diff_l2_mean.jsonl | energy_split1)`
+- 使用参数：target_fps=10, stride=4, dt=0.4s, hysteresis_ratio=0.95, up_count=2, down_count=2, cooldown=1, max_duration=2.0s, smoothing=ema(alpha=0.7, window=3), thr=0.0（来自 Step 7 报告）
+- 执行命令：
+  ```bash
+  conda run -n laps python tools/offline_segment_from_energy.py \
+    --energy-root /home/johnny/action_ws/output/gtea \
+    --pred-root /home/johnny/action_ws/output/gtea/segments_train_split1 \
+    --threshold-json /home/johnny/action_ws/output/gtea/thresholds/split1/best_threshold_quantized_token_diff.json \
+    --threshold-key optical_flow_mag_mean_best.best_f1.thr \
+    --target-fps 10 --stride 4 --hysteresis-ratio 0.95 --up-count 2 --down-count 2 --cooldown-windows 1 \
+    --max-duration-seconds 2.0 --stem-prefixes S2_ S3_ S4_ --use-smoothing --smooth-method ema --smooth-alpha 0.7 --smooth-window 3
+  ```
+- 日志摘录（每视频段数）：
+  - S2_Cheese_C1: n_segments=13；S2_Coffee_C1: 47；S2_Peanut_C1: 45；…（共21个视频，全部成功）
+- 说明：在预测目录为每个视频放置能量文件符号链接 `stream_energy_quantized_token_diff_l2_mean.jsonl -> {energy源}`，以便 mAP 评估使用能量均值作为置信度。
+
+### Step 11 训练集评估（已完成）
+- 输出路径：`/home/johnny/action_ws/output/gtea/stats/seg_eval_train_split1.json`
+- 执行命令：
+  ```bash
+  conda run -n laps python tools/eval_segmentation.py \
+    --pred-root /home/johnny/action_ws/output/gtea/segments_train_split1 \
+    --gt-dir /home/johnny/action_ws/online_datasets/gtea/gt_segments_json/train.split1 \
+    --iou-thrs 0.5 0.75 --tolerance-sec 2.0 --tolerance-secs 5.0 \
+    --output /home/johnny/action_ws/output/gtea/stats/seg_eval_train_split1.json
+  ```
+- 评估指标（汇总）：
+  - F1@2s = 0.6320
+  - F1@5s = 0.7312
+  - mAP@0.5 = 0.0924
+  - mAP@0.75 = 0.0045
+- 评估脚本输出（摘要）：
+  ```json
+  {"num_videos": 21, "F1@2.0s_mean": 0.6319710881952554, "Precision@2.0s_mean": 0.7646233557092472, "Recall@2.0s_mean": 0.5608493175789032, "F1@5.0s_mean": 0.7311512482631692, "Precision@5.0s_mean": 0.8777716392675846, "Recall@5.0s_mean": 0.6520124456607108, "mAP@0.5": 0.09237037314840263, "mAP@0.75": 0.004515526285149273 }
+  ```
+
+### 训练/测试对比与观察
+- 指标对比：
+  - 训练集 vs 测试集（F1@2s）：0.6320 vs 0.6008（+0.0312）
+  - 训练集 vs 测试集（F1@5s）：0.7312 vs 0.7173（+0.0139）
+  - mAP@0.5：0.0924 vs 0.0920（几乎一致）
+  - mAP@0.75：0.0045 vs 0.0041（几乎一致）
+- 结论与分析：
+  - 训练集 F1 略高于测试集，差距不大，未见明显过拟合迹象；在 IoU 指标上，训练/测试几乎一致，说明段定位的形状/边界一致性仍是主要瓶颈。
+  - 后续可考虑：
+    1) 调整状态机（动态持续时间上限、冷却窗口）或引入多阈值后处理；
+    2) 能量多尺度融合或自适应平滑；
+    3) 针对边界偏移优化（例如对齐策略/边界微调）。

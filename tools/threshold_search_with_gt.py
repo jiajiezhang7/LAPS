@@ -192,7 +192,12 @@ def load_gt_map(gt_dir: str) -> Dict[str, List[Tuple[float, float]]]:
 
 
 def collect_energy(energy_root: str, source: str, mode: str) -> Dict[str, List[float]]:
-    """Collect per-video energy series keyed by video stem (folder name)."""
+    """Collect per-video energy series keyed by video stem (folder name).
+    Supports multiple on-disk layouts:
+    - {root}/{stem}/stream_energy_{source}_{mode}.jsonl (preferred)
+    - {root}/{stem}/energy_split1 (JSONL without extension)
+    - fallback: first match of {root}/{stem}/stream_energy_*.jsonl
+    """
     series_map: Dict[str, List[float]] = {}
     if not os.path.isdir(energy_root):
         return series_map
@@ -200,9 +205,22 @@ def collect_energy(energy_root: str, source: str, mode: str) -> Dict[str, List[f
         d = os.path.join(energy_root, name)
         if not os.path.isdir(d):
             continue
-        p = os.path.join(d, f'stream_energy_{source}_{mode}.jsonl')
-        if os.path.exists(p):
-            series_map[name] = load_energy_jsonl(p)
+        candidates = [
+            os.path.join(d, f'stream_energy_{source}_{mode}.jsonl'),
+            os.path.join(d, 'energy_split1'),
+        ]
+        p_found = None
+        for p in candidates:
+            if os.path.exists(p):
+                p_found = p
+                break
+        if p_found is None:
+            # fallback: any stream_energy jsonl inside the folder
+            globs = glob.glob(os.path.join(d, 'stream_energy_*.jsonl'))
+            if globs:
+                p_found = globs[0]
+        if p_found:
+            series_map[name] = load_energy_jsonl(p_found)
     return series_map
 
 
