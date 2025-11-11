@@ -79,15 +79,17 @@ def main():
         video_id = os.path.splitext(fn)[0]
         p_name, cam_name, act_name, stem = parse_video_stem(video_id)
         raw_mp4 = os.path.join(args.raw_dir, f'{stem}.mp4')
-        if not os.path.exists(raw_mp4):
-            print(f'[WARN] raw video not found for {video_id}: {raw_mp4}; skip')
+        raw_avi = os.path.join(args.raw_dir, f'{stem}.avi')
+        raw_path = raw_mp4 if os.path.exists(raw_mp4) else (raw_avi if os.path.exists(raw_avi) else None)
+        if raw_path is None:
+            print(f'[WARN] raw video not found for {video_id}: {raw_mp4} or {raw_avi}; skip')
             continue
-        cap = cv2.VideoCapture(raw_mp4)
+        cap = cv2.VideoCapture(raw_path)
         fps = cap.get(cv2.CAP_PROP_FPS) or 0.0
         frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
         cap.release()
         if fps <= 0 or frames <= 0:
-            print(f'[WARN] invalid FPS/frames for {raw_mp4}; skip')
+            print(f'[WARN] invalid FPS/frames for {raw_path}; skip')
             continue
 
         with open(os.path.join(detect_dir, fn), 'rb') as f:
@@ -99,7 +101,7 @@ def main():
         os.makedirs(out_dir, exist_ok=True)
         out_json = os.path.join(out_dir, f'{stem}_segments.json')
         payload = {
-            'video': f'{stem}.mp4',
+            'video': os.path.basename(raw_path),
             'segments': [ {'start_sec': s, 'end_sec': e, 'label': f'segment_{i+1}'} for i,(s,e) in enumerate(segs) ],
             'video_duration_sec': frames / fps,
             'fps': fps,

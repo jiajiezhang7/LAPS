@@ -243,7 +243,7 @@ def gen_threshold_candidates(all_values: np.ndarray) -> List[float]:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--view', required=True, choices=['D01', 'D02'])
+    ap.add_argument('--view', required=False)
     ap.add_argument('--energy-root', required=True)
     ap.add_argument('--gt-dir', required=True)
     ap.add_argument('--source', default='optical_flow')
@@ -333,9 +333,9 @@ def main():
             'max_duration_seconds': float(args.max_duration_seconds),
             'tolerance_sec': float(args.tolerance_sec),
         },
-        'optical_flow_mag_mean_best': {
-            'best_f1': best
-        }
+    }
+    out[f'{args.source}_{args.mode}_best'] = {
+        'best_f1': best
     }
 
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
