@@ -61,7 +61,7 @@ num_layers: 2
 attn_pdrop: 0.1
 point_dim: 2
 hidden_dim: 768
-codebook_size: 2048
+codebook_size: 512
 causal_encoder: true
 decoder_mlp_hidden_dim: 256
 
@@ -94,7 +94,7 @@ loss:
   num_mag_bins: null
   max_polar_mag: null
   # codebook usage regularization & focal loss (for imbalance)
-  codebook_diversity_weight: 0.05
+  codebook_diversity_weight: 0.3
   use_focal: true
   focal_gamma: 4.0
   focal_alpha: 0.5

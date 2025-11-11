@@ -1,5 +1,5 @@
 # Breakfast split1 cam01 — training energy export config
-checkpoint_path: "/home/johnny/action_ws/checkpoints/motion_tokenizer/epochs10_breakfast_split1_cam01_m10/best.pt"
+checkpoint_path: "/home/johnny/action_ws/checkpoints/motion_tokenizer/epochs10_breakfast_split1_webcam02_m10/best.pt"
 decoder_window_size: 320
 
 device: "cuda"
@@ -11,7 +11,7 @@ display_fps: 10
 
 input:
   type: "folder"
-  dir: "/home/johnny/action_ws/online_datasets/breakfast/breakfast/Videos_train.split1_cam01"
+  dir: "/home/johnny/action_ws/online_datasets/breakfast/breakfast/Videos_train.split1_webcam02"
   video_exts: [".avi"]
   recursive: true
   batch:
@@ -24,7 +24,7 @@ stride: 4
 
 # Optional: stream codes (disabled by default)
 jsonl_output: false
-jsonl_path: "/home/johnny/action_ws/output/breakfast/energy_split1_cam01/stream_codes.jsonl"
+jsonl_path: "/home/johnny/action_ws/output/breakfast/energy_split1_webcam02/stream_codes.jsonl"
 
 energy:
   enable: true
@@ -32,7 +32,7 @@ energy:
   mode: "token_diff_l2_mean"     # l2_mean | token_diff_l2_mean
   visualize: false
   jsonl_output: true
-  jsonl_path: "/home/johnny/action_ws/output/breakfast/energy_split1_cam01"
+  jsonl_path: "/home/johnny/action_ws/output/breakfast/energy_split1_webcam02"
   smoothing:
     enable: false
 

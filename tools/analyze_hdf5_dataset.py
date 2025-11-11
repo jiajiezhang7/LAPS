@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import h5py
+from h5py import h5s, h5t
 import numpy as np
 
 try:
@@ -184,8 +185,24 @@ def analyze_h5_file(
 
             idxs = sample_window_indices(T, sample_windows)
             for t0 in idxs:
-                # reinit mode stores single window at index t0
-                win = dset[[t0]]  # (1, horizon, N, 2)
+                # try high-level slice; fallback to low-level HDF5 read with explicit IEEE_F32
+                try:
+                    win = dset[[t0]]  # (1, horizon, N, 2)
+                except Exception:
+                    # Low-level fallback: read into preallocated float32 via HDF5 API
+                    file_start = (int(t0), 0, 0, 0)
+                    file_count = (1, int(horizon), int(N), 2)
+                    file_space = dset.id.get_space()
+                    try:
+                        file_space.select_hyperslab(start=file_start, count=file_count)
+                    except TypeError:
+                        file_space.select_hyperslab(file_start, file_count)
+                    mem_space = h5s.create_simple(file_count)
+                    win = np.empty(file_count, dtype=np.float32)
+                    try:
+                        dset.id.read(mem_space, file_space, win, mtype=h5t.IEEE_F32LE)
+                    except TypeError:
+                        dset.id.read(mem_space, file_space, win)
                 s = summarize_velocities(win, movement_threshold_px)
                 if info["img_size"] is not None:
                     s["oob_frac"] = is_oob(win, info["img_size"][0], info["img_size"][1])

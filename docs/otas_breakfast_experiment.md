@@ -63,15 +63,28 @@
 - 当前状态：进行中（frames_train 子目录计数：193/341；正在遍历 *.avi 追加 [SKIP]/[OK]；监控日志：/home/johnny/action_ws/output/otas_logs/step4_extract_train.log；本轮进程 terminal_id=62）
 - 下一步：提帧完成后，立即生成 /home/johnny/action_ws/comapred_algorithm/OTAS/data/breakfast/video_info_train.pkl，并对训练集执行一次 dataset 构建验证
 
+
+### 4.x 更新：video_info_train.pkl 与训练集 window 构建验证（已完成）
+- video_info_train.pkl：已生成（341 条） → /home/johnny/action_ws/comapred_algorithm/OTAS/data/breakfast/video_info_train.pkl
+- 训练集 window 构建验证：在 otas 环境直接调用 dataset.Breakfast（mode='train'）完成，避免触发 main.py 的模型初始化
+  - 关键设置：opt.frame_path=frames_train；opt.video_info_file=video_info_train.pkl；opt.dataset=BF；opt.feature_model=tf；opt.view=cam01
+  - 为避免覆盖测试集的 window 缓存，临时使用 pkl_folder_name=../output/OTAS/BF_tf_cam01_train
+  - 结果：Applied view filter: cam01; selected videos: 341；window 总数=244,789；无异常
+  - 命令：conda run -n otas python /home/johnny/action_ws/tmp_train_dataset_check2.py
+
+  - 输出：/home/johnny/action_ws/comapred_algorithm/OTAS/output/OTAS/BF_tf_cam01_train/window_lists/window_list_info.pkl
+- 说明：正式训练时，将在默认目录 ../output/OTAS/BF_tf_cam01 下重建训练用 window 列表（如已有测试缓存，会先清理以确保使用训练集视频重建）
+
 ### 步骤5（计划）：OTAS 训练与测试集推理（10 epochs）
-- 训练命令（otas）：
+- 训练命令（otas；10 epochs，GPU 0）：
   - cd /home/johnny/action_ws/comapred_algorithm/OTAS/code && \
-    python main.py --mode train --num_epoch 10 \
+    conda run -n otas python main.py --mode train --num_epoch 10 --gpu 0 \
       --frame-path /home/johnny/action_ws/comapred_algorithm/OTAS/data/breakfast/frames_train \
       --video-info-file /home/johnny/action_ws/comapred_algorithm/OTAS/data/breakfast/video_info_train.pkl \
       --view cam01 --dataset BF --feature_model tf
-- 验证/推理命令（otas）：
-  - python main.py --mode val \
+- 验证/推理命令（otas；GPU 0）：
+  - cd /home/johnny/action_ws/comapred_algorithm/OTAS/code && \
+    conda run -n otas python main.py --mode val --gpu 0 \
       --frame-path /home/johnny/action_ws/comapred_algorithm/OTAS/data/breakfast/frames_test \
       --video-info-file /home/johnny/action_ws/comapred_algorithm/OTAS/data/breakfast/video_info_test.pkl \
       --view cam01 --dataset BF --feature_model tf
