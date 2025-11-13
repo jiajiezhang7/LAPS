@@ -132,6 +132,11 @@ def create_compute_worker(
                 # 2) CoTracker tracking
                 t0 = time.perf_counter()
                 vel_pix = track_window_with_online(frames, grid_size=grid_size, device=device)
+                try:
+                    if device.type == 'cuda':
+                        torch.cuda.synchronize()
+                except Exception:
+                    pass
                 t_track = time.perf_counter() - t0
 
                 # 3) Normalize velocities
@@ -220,6 +225,11 @@ def create_compute_worker(
                         to_quantize = model.encode(x_input, cond=None)
                         quantized, fsq_indices = model.quantize(to_quantize)
 
+                try:
+                    if device.type == 'cuda':
+                        torch.cuda.synchronize()
+                except Exception:
+                    pass
                 t_forward = time.perf_counter() - t1
 
                 # codes extraction from fsq_indices

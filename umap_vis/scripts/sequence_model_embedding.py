@@ -463,6 +463,9 @@ class TinyTransformer:
                 seqz = z[1:, 0, :] if self.use_cls else z[:, 0, :]
                 w = self.torch.softmax(seqz @ self.attn_query, dim=0)  # (T,)
                 pooled = (w.unsqueeze(1) * seqz).sum(dim=0)
+            elif self.pooling == "max":
+                seqz = z[1:, 0, :] if self.use_cls else z[:, 0, :]
+                pooled, _ = seqz.max(dim=0)
             else:
                 pooled = z.mean(dim=0).squeeze(0)
             return pooled.detach().cpu().numpy().astype(np.float32)

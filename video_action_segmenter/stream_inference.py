@@ -9,6 +9,13 @@ import numpy as np
 import torch
 import os
 import json
+import math
+import statistics
+try:
+    import resource
+except Exception:
+    resource = None
+
 import threading
 import sys
 import subprocess
@@ -162,6 +169,13 @@ def run_streaming(args):
     energy_jsonl_path = Path(energy_cfg.get("jsonl_path", "./video_action_segmenter/inference_outputs/stream_energy.jsonl")).resolve()
     if energy_jsonl_output:
         energy_jsonl_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # 性能监控配置（JSONL 每窗 + 汇总）
+    perf_cfg = cfg.get("perf", {}) if isinstance(cfg.get("perf", {}), dict) else {}
+    perf_jsonl_output = bool(perf_cfg.get("jsonl_output", True))
+    perf_summary_output = bool(perf_cfg.get("summary_output", True))
+    perf_jsonl_path_cfg = perf_cfg.get("jsonl_path", None)
+    perf_summary_dir_cfg = perf_cfg.get("summary_dir", None)
 
     # 能量可视化配置
     energy_visualize = bool(energy_cfg.get("visualize", True))
@@ -337,6 +351,21 @@ def run_streaming(args):
     if handled_folder:
         return
 
+    # 可选：将视频名映射到自定义模板（用于匹配特定数据集的 GT 命名，例如 Breakfast）
+    try:
+        name_tmpl = str(input_cfg.get("video_name_template", "")).strip()
+    except Exception:
+        name_tmpl = ""
+    if name_tmpl:
+        try:
+            _raw_name = str(video_name)
+            _id_part = _raw_name.split('_', 1)[0] if '_' in _raw_name else _raw_name
+            video_name_mapped = name_tmpl.format(name=_raw_name, id=_id_part)
+            print(f"[Input] Remap video_name: '{_raw_name}' -> '{video_name_mapped}' via template='{name_tmpl}'")
+            video_name = video_name_mapped
+        except Exception as e:
+            print(f"[Input][WARN] Failed to apply video_name_template on '{video_name}': {e}")
+
     # 若为单文件模式且启用跳过逻辑：检查目标输出是否已有该视频名的结果，若有则直接跳过
     if seg_enable and seg_skip_if_exists and src_type == "file":
         try:
@@ -475,6 +504,41 @@ def run_streaming(args):
         seg_videos_dir, seg_codes_dir = ensure_output_dirs(seg_output_dir, video_name)
     # 片段元数据收集
     segments_records: List[dict] = []
+    # 性能指标收集与输出初始化
+    job_enqueue_ts = {}
+    perf_t_track: List[float] = []
+    perf_t_forward: List[float] = []
+    perf_t_total: List[float] = []
+    perf_latency: List[float] = []
+    ok_count = 0
+    lag_count = 0
+    wall_start = time.perf_counter()
+    # 预清理 GPU 峰值显存计数
+    try:
+        if device.type == 'cuda':
+            torch.cuda.reset_peak_memory_stats(device)
+    except Exception:
+        pass
+    # 解析并确定性能输出路径
+    if 'perf_jsonl_output' in locals() and (perf_jsonl_output or perf_summary_output):
+        try:
+            perf_dir = (seg_videos_dir.parent if seg_enable else Path("./video_action_segmenter/inference_outputs").resolve())
+        except Exception:
+            perf_dir = Path("./video_action_segmenter/inference_outputs").resolve()
+        try:
+            perf_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+        perf_jsonl_path = (Path(perf_jsonl_path_cfg).resolve() if (perf_jsonl_output and perf_jsonl_path_cfg) else (perf_dir / "stream_perf.jsonl"))
+        perf_summary_path = (Path(perf_summary_dir_cfg).resolve() / f"{video_name}_perf_summary.json") if perf_summary_dir_cfg else (perf_dir / f"{video_name}_perf_summary.json")
+        # 追加写入工具
+        def append_perf_jsonl(path: Path, record: dict):
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                with open(path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(record, ensure_ascii=False) + "\n")
+            except Exception:
+                pass
     # 增量写入函数
     def _write_segments_json_incremental():
         if not seg_export_segments_json:
@@ -640,6 +704,34 @@ def run_streaming(args):
                 # 预算判定
                 slack = budget_per_window - t_total
                 status = "OK" if slack >= 0 else f"LAG(+{abs(slack):.3f}s)"
+                # 性能记录（JSONL/汇总）
+                try:
+                    if 'perf_jsonl_output' in locals() and (perf_jsonl_output or perf_summary_output):
+                        if slack >= 0:
+                            ok_count += 1
+                        else:
+                            lag_count += 1
+                        perf_t_track.append(float(t_track))
+                        perf_t_forward.append(float(t_forward))
+                        perf_t_total.append(float(t_total))
+                        st = job_enqueue_ts.pop(int(res.get("win_idx", -1)), None)
+                        latency = (time.perf_counter() - st) if st is not None else None
+                        if latency is not None:
+                            perf_latency.append(float(latency))
+                        if perf_jsonl_output:
+                            append_perf_jsonl(perf_jsonl_path, {
+                                "video": str(video_name),
+                                "win": int(res.get("win_idx", windows_done)),
+                                "t_track_s": float(t_track),
+                                "t_forward_s": float(t_forward),
+                                "t_total_s": float(t_total),
+                                "budget_s": float(budget_per_window),
+                                "slack_s": float(slack),
+                                "status": str(status),
+                                "latency_s": (float(latency) if latency is not None else None),
+                            })
+                except Exception:
+                    pass
 
                 pre_meta = res.get("pre_gate", None)
                 pre_info = ""
@@ -1004,6 +1096,7 @@ def run_streaming(args):
             win_frames = list(ring)  # 长度 T
             job = {"win_idx": int(windows_enqueued), "frames": win_frames}
             try:
+                job_enqueue_ts[int(windows_enqueued)] = time.perf_counter()
                 job_q.put_nowait(job)
                 if seg_enable:
                     window_frames_store[int(windows_enqueued)] = win_frames
@@ -1099,6 +1192,77 @@ def run_streaming(args):
                     pass
         except Exception:
             pass
+        # 写出性能汇总（如启用）
+        try:
+            if 'perf_summary_output' in locals() and perf_summary_output and ('perf_t_total' in locals()) and len(perf_t_total) > 0:
+                def _quantile(xs, q):
+                    xs = sorted(xs)
+                    if not xs:
+                        return None
+                    k = (len(xs)-1)*q
+                    f = int(k // 1)
+                    c = int(k // 1 + 1) if f < len(xs)-1 else f
+                    if f == c:
+                        return float(xs[f])
+                    return float(xs[f] + (xs[c]-xs[f])*(k-f))
+                wall_time = time.perf_counter() - wall_start if 'wall_start' in locals() else None
+                realized_wps = float(len(perf_t_total)) / float(wall_time) if wall_time and wall_time > 0 else None
+                realized_fps = float(realized_wps * float(stride)) if realized_wps is not None else None
+                ok_ratio = float(ok_count) / float(len(perf_t_total)) if len(perf_t_total) > 0 else None
+                gpu_mem_mb = None; gpu_mem_reserved_mb = None
+                try:
+                    if device.type == 'cuda':
+                        try:
+                            gpu_mem_mb = float(torch.cuda.max_memory_allocated(device)) / (1024.0*1024.0)
+                        except Exception:
+                            pass
+                        try:
+                            gpu_mem_reserved_mb = float(torch.cuda.max_memory_reserved(device)) / (1024.0*1024.0)
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+                cpu_max_rss_mb = None
+                try:
+                    if 'resource' in globals() and resource is not None:
+                        cpu_max_rss_mb = float(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss) / 1024.0
+                except Exception:
+                    pass
+                try:
+                    param_count = int(sum(p.numel() for p in model.parameters()))
+                except Exception:
+                    param_count = None
+                summary = {
+                    "video": str(input_video_filename),
+                    "video_name": str(video_name),
+                    "processed_at": datetime.now(timezone.utc).isoformat(),
+                    "target_fps": int(target_fps),
+                    "stride": int(stride),
+                    "budget_per_window_s": float(budget_per_window),
+                    "windows_done": int(len(perf_t_total)),
+                    "wall_time_s": (float(wall_time) if wall_time is not None else None),
+                    "ok_ratio": (float(ok_ratio) if ok_ratio is not None else None),
+                    "realized_windows_per_sec": (float(realized_wps) if realized_wps is not None else None),
+                    "throughput_fps_estimate": (float(realized_fps) if realized_fps is not None else None),
+                    "t_total_s": {"mean": float(sum(perf_t_total)/len(perf_t_total)), "p50": (_quantile(perf_t_total,0.5) if len(perf_t_total)>0 else None), "p95": (_quantile(perf_t_total,0.95) if len(perf_t_total)>0 else None), "max": float(max(perf_t_total))},
+                    "t_track_s": {"mean": float(sum(perf_t_track)/len(perf_t_track)), "p50": (_quantile(perf_t_track,0.5) if len(perf_t_track)>0 else None), "p95": (_quantile(perf_t_track,0.95) if len(perf_t_track)>0 else None), "max": float(max(perf_t_track))},
+                    "t_forward_s": {"mean": float(sum(perf_t_forward)/len(perf_t_forward)), "p50": (_quantile(perf_t_forward,0.5) if len(perf_t_forward)>0 else None), "p95": (_quantile(perf_t_forward,0.95) if len(perf_t_forward)>0 else None), "max": float(max(perf_t_forward))},
+                    "latency_s": {"mean": (float(sum(perf_latency)/len(perf_latency)) if perf_latency else None), "p50": (_quantile(perf_latency,0.5) if perf_latency else None), "p95": (_quantile(perf_latency,0.95) if perf_latency else None), "max": (float(max(perf_latency)) if perf_latency else None)},
+                    "gpu_max_mem_allocated_mb": gpu_mem_mb,
+                    "gpu_max_mem_reserved_mb": gpu_mem_reserved_mb,
+                    "cpu_max_rss_mb": cpu_max_rss_mb,
+                    "param_count": param_count,
+                }
+                try:
+                    perf_summary_path.parent.mkdir(parents=True, exist_ok=True)
+                except Exception:
+                    pass
+                with open(perf_summary_path, "w", encoding="utf-8") as f:
+                    json.dump(summary, f, ensure_ascii=False, indent=2)
+                print(f"[Perf] Summary written: {perf_summary_path}")
+        except Exception:
+            pass
+
         # 写出每视频 JSON 元数据文件
         try:
             if 'seg_enable' in locals() and seg_enable and seg_export_segments_json:

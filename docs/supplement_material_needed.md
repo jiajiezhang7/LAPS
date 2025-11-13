@@ -1,5 +1,3 @@
-这是一个非常好的问题，对实验计划进行分类是高效执行的关键。作为你的“ActionPaper-Writer”，我来帮你详细拆解。
-
 你这份实验计划中，大部分图表（Figures）都是**代码实验**的直接产出，而表格（Tables）和少数示意图则属于**人工整理**或**收集**。
 
 我已将你的计划重组为两个独立的部分：
@@ -17,7 +15,7 @@
 * **目标：** 证明 $M_{\theta}$ 训练收敛。
 * **产出：** `Figure S2: Motion Tokenizer 训练损失曲线`
 * **技术实现细节：**
-    1.  运行 $M_{\theta}$ 的训练脚本。
+    1.  运行 $M_{\theta}$ 的训练脚本。 （已经训练完毕）
     2.  确保训练过程中记录了每个 epoch 或 step 的 `Cross-Entropy Loss`（例如，使用 `wandb`, `TensorBoard`, 或简单的 CSV 日志）。
     3.  **可视化脚本 (`plot_loss_curve.py`)：**
         * 读取损失日志文件。
@@ -28,7 +26,7 @@
 
 * **目标：** 详细展示 $\theta_{on}$ 的无监督标定过程及其鲁棒性。
 * **产出：**
-    * `Figure S3: 代理信号 (Proxy Signal) 可视化`
+    * `Figure S3: 代理信号 (Proxy Signal - velocity) 可视化`
     * `Figure S4: $\theta_{on}$ 参数扫描曲线`
     * `Figure S5: Hysteresis 与 Debounce 敏感性分析`
 * **技术实现细节：**
@@ -113,7 +111,7 @@
 
 这部分内容不需要新的代码实验，而是依赖于你的绘图、截图、以及对已知实验配置和数据信息的““转录””。
 
-## 1. 实验 1.1：Motion Tokenizer (产出 Fig. S1, Table S1)
+## （DONE）1. 实验 1.1：Motion Tokenizer (产出 Fig. S1, Table S1)
 
 * **`Figure S1: Motion Tokenizer 详细架构图`**
     * **类型：** **人工绘制**。

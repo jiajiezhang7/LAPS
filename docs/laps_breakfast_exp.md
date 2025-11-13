@@ -115,8 +115,6 @@ conda run -n laps python /home/johnny/action_ws/tools/convert_breakfast_gt_to_se
 - 输出根目录：/home/johnny/action_ws/data/preprocessed_breakfast_webcam02_m10
 - 最终输出路径（由 dest+dataset_name 决定）：/home/johnny/action_ws/data/preprocessed_breakfast_webcam02_m10/split1
 - 关键参数：target_fps=10, resize_shorter=320, n_tracks=400, horizon=16, reinit=true, view_name=default
-- 注意：target_fps 从 5 提升为 10，帧率翻倍，预处理时间与存储需求相应增加
-- 说明：正在处理 30 个 HDF5（opencv_num_threads=1），我会持续监控进度并在阶段性完成后汇报。
 - 命令（subset30）：
 ```bash
 conda run -n laps python -m amplify.preprocessing.preprocess_my_segments \
