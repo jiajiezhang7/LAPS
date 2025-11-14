@@ -36,3 +36,13 @@
     /media/johnny/48FF-AA60/output
 
     /media/johnny/48FF-AA60/ABD
+
+
+  python -m video_action_segmenter.scripts.plot_energy_comparison \
+    --no-optical-flow \
+    --action-energy-jsonl /home/johnny/action_ws/datasets/output/segmentation_outputs/D01_LAPS/D01_sample_2_seg006/stream_energy_quantized_token_diff_l2_mean.jsonl \
+    --gt-json /home/johnny/action_ws/datasets/gt_annotations/true_gt_backup_20251113_234422/D01/D01_sample_2_seg006_segments.json \
+    --output-dir /home/johnny/action_ws/supplement_output/segmentor \
+    --segmentor-json /home/johnny/action_ws/datasets/output/segmentation_outputs_backup_20251113_235451/D01_LAPS/D01_sample_2_seg006/segmented_videos/D01_sample_2_seg006_segments.json \
+    --start-sec 110 --duration-sec 20 \
+    --dpi 300

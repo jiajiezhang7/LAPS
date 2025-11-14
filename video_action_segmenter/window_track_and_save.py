@@ -437,8 +437,12 @@ def process_single_video(
     pre_gate_params: Dict[str, Any],
     motion_gate_params: Dict[str, Any],
     decoder_window_size: int,
+    relative_parent: Optional[Path] = None,
 ) -> int:
-    out_dir = output_root / video_path.stem
+    out_root = output_root
+    if relative_parent and relative_parent != Path('.'):
+        out_root = out_root / relative_parent
+    out_dir = out_root / video_path.stem
     out_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"[I/O] input={video_path}")
@@ -706,6 +710,7 @@ def main():
                 pre_gate_params=pre_gate_params,
                 motion_gate_params=motion_gate_params,
                 decoder_window_size=decoder_window_size,
+                relative_parent=None,
             )
             processed_videos = 1
     if input_dir_str is not None:
@@ -725,6 +730,12 @@ def main():
             return 1
         print(f"[Batch] found {len(files)} video files in {dir_path}")
         for fp in files:
+            relative_parent: Optional[Path] = None
+            try:
+                relative_parent = fp.parent.relative_to(dir_path)
+            except ValueError:
+                # 如果文件不在 dir_path 内（符号链接等情况），保持默认结构
+                relative_parent = None
             try:
                 processed = process_single_video(
                     video_path=fp,
@@ -744,6 +755,7 @@ def main():
                     pre_gate_params=pre_gate_params,
                     motion_gate_params=motion_gate_params,
                     decoder_window_size=decoder_window_size,
+                    relative_parent=relative_parent,
                 )
                 total_processed_windows += processed
                 processed_videos += 1

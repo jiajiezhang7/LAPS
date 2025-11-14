@@ -407,7 +407,11 @@ def run_streaming(args):
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) if cap is not None else 0
     except Exception:
         total_frames = 0
-    meta_timebase_fps = float(target_fps)
+    # 使用视频时间基：文件输入优先用原视频 fps，否则回退到 target_fps（实时源）
+    if src_type == "file" and orig_fps and orig_fps > 0:
+        meta_timebase_fps = float(orig_fps)
+    else:
+        meta_timebase_fps = float(target_fps)
     # 输入视频完整文件名（含扩展名，仅 file 模式可靠）
     try:
         _path_env = os.environ.get("MT_OVERRIDE_INPUT_PATH", "").strip()
@@ -1100,7 +1104,7 @@ def run_streaming(args):
                 job_q.put_nowait(job)
                 if seg_enable:
                     window_frames_store[int(windows_enqueued)] = win_frames
-                    # 记录该窗覆盖的帧区间 [start, end]（重采样 20Hz 的帧计数）。
+                    # 记录该窗覆盖的帧区间 [start, end]（当前实现为解码出的原视频帧计数）。
                     try:
                         ws = int(frames_emitted) - int(T)
                         we = int(frames_emitted) - 1

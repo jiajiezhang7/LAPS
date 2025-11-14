@@ -9,12 +9,12 @@
 # 目录模式：
 #   1) 设置 input_dir 为目录路径；或
 #   2) 将 video 设置为目录路径（同样按目录模式处理）。
-video: /home/johnny/action_ws/datasets/cotracker_demo/raw_videos
-output_dir: /home/johnny/action_ws/datasets/cotracker_demo/tracked_videos  # 输出根目录
+video: /home/johnny/action_ws/datasets/output/clustered_results/D01_LAPS
+output_dir: /home/johnny/action_ws/datasets/output/cotracker_whole/D01  # 输出根目录
 
 # 目录模式可选参数（若不需要可保持为空/默认）：
 # input_dir: /path/to/folder
-# recursive: true   # 是否递归搜索子目录，默认 false
+recursive: true   # 是否递归搜索子目录，默认 false
 # include_exts: [mp4, m4v, mov, avi, mkv]  # 支持列表或逗号分隔字符串
 # max_files: 0      # 最多处理的文件数；0 表示不限制
 

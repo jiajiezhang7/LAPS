@@ -93,7 +93,6 @@
 - 对一个动作视频，分T=16滑动窗口，进行CoTracker跟踪（每窗口重采样） —— 更符合当前方法论 （prefered）
 
   python -m video_action_segmenter.window_track_and_save \
-    --output-dir /home/johnny/action_ws/video_action_segmenter/inference_outputs/windows \
     --target-fps 20 \
     --resize-shorter 480 \
     --grid-size 20 \
