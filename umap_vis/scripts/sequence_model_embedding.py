@@ -116,12 +116,15 @@ def plot_umap_2d(emb: np.ndarray, labels: Optional[np.ndarray], title: str, out_
     - 专业配色方案
     - 优化的字体和布局
     - 清晰的簇边界
+    - 背景透明
+    - 增大坐标轴刻度字体
+    - 添加细实线网格
     """
     plt.style.use('seaborn-v0_8-darkgrid')
     fig, ax = plt.subplots(figsize=(12, 10), dpi=100)
-    
+
     c = np.arange(len(emb)) if labels is None else labels
-    
+
     # 使用高质量配色方案（适合论文）
     if labels is not None and len(np.unique(labels)) <= 10:
         # 离散簇：使用专业的离散色板
@@ -129,41 +132,42 @@ def plot_umap_2d(emb: np.ndarray, labels: Optional[np.ndarray], title: str, out_
         unique_labels = np.unique(labels)
         for label in unique_labels:
             mask = labels == label
-            ax.scatter(emb[mask, 0], emb[mask, 1], 
-                      c=[cmap(label % 10)], 
-                      s=80, alpha=0.7, 
+            ax.scatter(emb[mask, 0], emb[mask, 1],
+                      c=[cmap(label % 10)],
+                      s=80, alpha=0.7,
                       edgecolors='black', linewidth=0.5,
                       label=f'Cluster {int(label)}',
                       rasterized=True)
-        ax.legend(loc='best', fontsize=28, framealpha=0.95, edgecolor='black', 
+        ax.legend(loc='best', fontsize=28, framealpha=0.95, edgecolor='black',
                  title_fontsize=28, frameon=True, fancybox=False)
     else:
         # 连续标签：使用连续色板
-        sc = ax.scatter(emb[:, 0], emb[:, 1], c=c, cmap="viridis", 
+        sc = ax.scatter(emb[:, 0], emb[:, 1], c=c, cmap="viridis",
                        s=80, alpha=0.7, edgecolors='black', linewidth=0.5,
                        rasterized=True)
         cbar = plt.colorbar(sc, ax=ax, label=("Cluster ID" if labels is not None else "Sample Index"),
                            pad=0.02, fraction=0.046)
-        cbar.ax.tick_params(labelsize=12)
-    
+        cbar.ax.tick_params(labelsize=25)  # 增大colorbar刻度字体
+
     # 轴标签（不显示标题）
-    ax.set_xlabel("UMAP Dimension 1", fontsize=16, fontweight='bold')
-    ax.set_ylabel("UMAP Dimension 2", fontsize=16, fontweight='bold')
-    
-    # 优化网格和脊
-    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+    ax.set_xlabel("UMAP Dimension 1", fontsize=25, fontweight='bold')
+    ax.set_ylabel("UMAP Dimension 2", fontsize=25, fontweight='bold')
+
+    # 添加细实线网格（横轴和纵轴）
+    ax.grid(True, alpha=0.5, linestyle='-', linewidth=0.8, color='gray')
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.spines['left'].set_linewidth(1.5)
     ax.spines['bottom'].set_linewidth(1.5)
-    
-    # 优化刻度（增大字体）
-    ax.tick_params(axis='both', which='major', labelsize=13, width=1.5, length=6)
-    
+
+    # 增大坐标轴刻度字体
+    ax.tick_params(axis='both', which='major', labelsize=18, width=1.5, length=6)
+
     plt.tight_layout()
-    plt.savefig(str(out_path), dpi=300, bbox_inches='tight', facecolor='white', edgecolor='none')
+    # 背景透明化：设置 transparent=True，移除 facecolor='white'
+    plt.savefig(str(out_path), dpi=300, bbox_inches='tight', transparent=True, edgecolor='none')
     plt.close()
-    print(f"保存 2D 图 (300 DPI): {out_path}")
+    print(f"保存 2D 图 (300 DPI, 透明背景): {out_path}")
 
 
 def plot_umap_3d(emb: np.ndarray, labels: Optional[np.ndarray], title: str, out_path: Path):

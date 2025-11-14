@@ -46,3 +46,15 @@
     --segmentor-json /home/johnny/action_ws/datasets/output/segmentation_outputs_backup_20251113_235451/D01_LAPS/D01_sample_2_seg006/segmented_videos/D01_sample_2_seg006_segments.json \
     --start-sec 110 --duration-sec 20 \
     --dpi 300
+
+
+  python umap_vis/scripts/sequence_model_embedding.py \
+  --data-dir /media/johnny/48FF-AA60/online_inference_output/epochs5_complete500_d01_m10_cb2048_stride4_vector \
+  --fig-dir umap_vis/figure \
+  --stats-dir umap_vis/statistics \
+  --use-best-grid-config \
+  --k-min 4 \
+  --k-max 4 \
+  --metric cosine \
+  --neighbors 15 \
+  --min-dist 0.1
