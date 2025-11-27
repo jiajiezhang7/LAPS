@@ -49,12 +49,12 @@
 
 
   python umap_vis/scripts/sequence_model_embedding.py \
-  --data-dir /media/johnny/48FF-AA60/online_inference_output/epochs5_complete500_d01_m10_cb2048_stride4_vector \
+  --data-dir /media/johnny/48FF-AA60/online_inference_output/epochs5_complete500_d02_m10_cb2048_stride4_vector \
   --fig-dir umap_vis/figure \
   --stats-dir umap_vis/statistics \
   --use-best-grid-config \
-  --k-min 4 \
-  --k-max 4 \
+  --k-min 3 \
+  --k-max 3 \
   --metric cosine \
   --neighbors 15 \
-  --min-dist 0.1
+  --min-dist 0.1 

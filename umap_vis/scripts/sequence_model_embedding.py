@@ -138,8 +138,8 @@ def plot_umap_2d(emb: np.ndarray, labels: Optional[np.ndarray], title: str, out_
                       edgecolors='black', linewidth=0.5,
                       label=f'Cluster {int(label)}',
                       rasterized=True)
-        ax.legend(loc='best', fontsize=28, framealpha=0.95, edgecolor='black',
-                 title_fontsize=28, frameon=True, fancybox=False)
+        # ax.legend(loc='best', fontsize=28, framealpha=0.95, edgecolor='black',
+        #          title_fontsize=28, frameon=True, fancybox=False)
     else:
         # 连续标签：使用连续色板
         sc = ax.scatter(emb[:, 0], emb[:, 1], c=c, cmap="viridis",
@@ -283,15 +283,15 @@ def plot_umap_3d(emb: np.ndarray, labels: Optional[np.ndarray], title: str, out_
         paper_bgcolor='white',
         plot_bgcolor='rgba(240, 240, 240, 0.9)',
         hovermode='closest',
-        showlegend=True,
-        legend=dict(
-            x=0.02,
-            y=0.98,
-            bgcolor='rgba(255, 255, 255, 0.9)',
-            bordercolor='#000000',
-            borderwidth=1,
-            font=dict(size=26, family='Arial, sans-serif')
-        )
+        showlegend=False,
+        # legend=dict(
+        #     x=0.02,
+        #     y=0.98,
+        #     bgcolor='rgba(255, 255, 255, 0.9)',
+        #     bordercolor='#000000',
+        #     borderwidth=1,
+        #     font=dict(size=26, family='Arial, sans-serif')
+        # )
     )
     
     fig.write_html(str(out_path))
@@ -380,6 +380,52 @@ def cluster_and_scores(X: np.ndarray, k_min: int, k_max: int, random_state: int 
     if best_k is None:
         best_k = k_min
         best_labels = KMeans(n_clusters=best_k, n_init=10, random_state=random_state).fit_predict(X_km)
+    return results, int(best_k), best_labels
+
+
+def cluster_in_umap_space(emb: np.ndarray, k_min: int, k_max: int, random_state: int = 42) -> Tuple[Dict[int, Dict[str, float]], int, np.ndarray]:
+    """
+    在 UMAP 降维空间中进行聚类（而非原始高维空间）。
+    这样聚类距离与可视化距离一致。
+    """
+    n = emb.shape[0]
+    if n < 3:
+        print("[WARN] 样本过少，跳过聚类评估")
+        return {}, 0, np.zeros(n, dtype=int)
+    k_max = max(2, min(k_max, n - 1)); k_min = max(2, min(k_min, k_max))
+    results: Dict[int, Dict[str, float]] = {}; best_k = None; best_score = -1.0; best_labels = None
+    
+    for k in range(k_min, k_max + 1):
+        km = KMeans(n_clusters=k, n_init=10, random_state=random_state)
+        labels = km.fit_predict(emb)
+        if len(np.unique(labels)) < 2:
+            continue
+        try:
+            sil = silhouette_score(emb, labels, metric='euclidean')
+        except Exception:
+            sil = float("nan")
+        try:
+            db = davies_bouldin_score(emb, labels)
+        except Exception:
+            db = float("nan")
+        try:
+            ch = calinski_harabasz_score(emb, labels)
+        except Exception:
+            ch = float("nan")
+        w_intra, b_inter, ratio = intra_inter_stats(emb, labels, metric='euclidean')
+        results[k] = {
+            "silhouette": float(sil),
+            "davies_bouldin": float(db),
+            "calinski_harabasz": float(ch),
+            "intra_dist": float(w_intra),
+            "inter_centroid_dist": float(b_inter),
+            "intra_over_inter": float(ratio),
+        }
+        if not np.isnan(sil) and sil > best_score:
+            best_score = sil; best_k = k; best_labels = labels
+    if best_k is None:
+        best_k = k_min
+        best_labels = KMeans(n_clusters=best_k, n_init=10, random_state=random_state).fit_predict(emb)
     return results, int(best_k), best_labels
 
 
@@ -610,6 +656,7 @@ def main():
     p.add_argument("--n-heads", type=int, default=4)
     p.add_argument("--pooling", type=str, default="mean", choices=["mean", "cls", "attn"])
     p.add_argument("--device", type=str, default="cpu")
+    p.add_argument("--cluster-in-umap-space", action="store_true", help="在 UMAP 降维空间中进行聚类，而非原始高维空间（使聚类距离与可视化距离一致）")
     p.add_argument("--export-video-samples", action="store_true", help="在 --use-best-grid-config 模式下，完成 k=3 聚类与可视化后，将每簇最多100个视频片段复制到 /home/johnny/action_ws/classify_res")
 
     args = p.parse_args()
@@ -754,7 +801,7 @@ def main():
         ax4 = plt.subplot(2,2,4); ax4.plot(ks, ratio, marker='o'); ax4.set_title('Intra/Inter vs k'); ax4.set_xlabel('k'); ax4.set_ylabel('Intra/Inter (lower better)')
         plt.tight_layout(); plt.savefig(str(fig_dir / "best_config_metrics_vs_k.png"), dpi=150); plt.close()
 
-        # 任务2.2：k=3 与 k=5 的差异
+        # 任务2.2：根据 k_min 和 k_max 生成指定 k 值的可视化
         def eval_at_k(X: np.ndarray, k: int, metric: str):
             X_km = X if metric != 'cosine' else X / (np.linalg.norm(X, axis=1, keepdims=True) + 1e-12)
             labels = KMeans(n_clusters=k, n_init=10, random_state=42).fit_predict(X_km)
@@ -764,21 +811,74 @@ def main():
             w_intra, b_inter, ratio = intra_inter_stats(X, labels, metric=metric)
             sizes = [int((labels==c).sum()) for c in sorted(np.unique(labels))]
             return labels, {"silhouette": sil, "davies_bouldin": db, "calinski_harabasz": chv, "intra_over_inter": ratio}, sizes
-        labels_k3, m_k3, sizes_k3 = eval_at_k(Xs, 3, args.metric)
-        labels_k5, m_k5, sizes_k5 = eval_at_k(Xs, 5, args.metric)
-        # UMAP 可视化
+
+        def eval_at_k_umap(emb: np.ndarray, k: int):
+            """在 UMAP 降维空间中评估聚类"""
+            labels = KMeans(n_clusters=k, n_init=10, random_state=42).fit_predict(emb)
+            sil = silhouette_score(emb, labels, metric='euclidean')
+            db = davies_bouldin_score(emb, labels)
+            chv = calinski_harabasz_score(emb, labels)
+            w_intra, b_inter, ratio = intra_inter_stats(emb, labels, metric='euclidean')
+            sizes = [int((labels==c).sum()) for c in sorted(np.unique(labels))]
+            return labels, {"silhouette": sil, "davies_bouldin": db, "calinski_harabasz": chv, "intra_over_inter": ratio}, sizes
+
+        # 生成 UMAP 嵌入（只需计算一次）
         emb2 = umap_embed(Xs, n_components=2, n_neighbors=args.neighbors, min_dist=args.min_dist, metric=args.metric)
         emb3 = umap_embed(Xs, n_components=3, n_neighbors=args.neighbors, min_dist=args.min_dist, metric=args.metric)
-        if emb2 is not None:
-            plot_umap_2d(emb2, labels_k3, title=f"UMAP 2D - best cfg k=3 (pool={pooling},d={d_model},L={n_layers},H={n_heads})", out_path=fig_dir / "umap_2d_best_config_k3.png")
-            plot_umap_2d(emb2, labels_k5, title=f"UMAP 2D - best cfg k=5 (pool={pooling},d={d_model},L={n_layers},H={n_heads})", out_path=fig_dir / "umap_2d_best_config_k5.png")
-        if emb3 is not None:
-            plot_umap_3d(emb3, labels_k3, title=f"UMAP 3D - best cfg k=3 (pool={pooling},d={d_model},L={n_layers},H={n_heads})", out_path=fig_dir / "umap_3d_best_config_k3.html")
-            plot_umap_3d(emb3, labels_k5, title=f"UMAP 3D - best cfg k=5 (pool={pooling},d={d_model},L={n_layers},H={n_heads})", out_path=fig_dir / "umap_3d_best_config_k5.html")
+
+        # 根据是否启用 --cluster-in-umap-space 选择聚类方式
+        if args.cluster_in_umap_space:
+            print("[UMAP-SPACE] 在 UMAP 降维空间中进行聚类")
+            if emb2 is None:
+                print("[ERR] UMAP 降维失败，无法在降维空间中聚类")
+                return
+            # 在 2D UMAP 空间中进行聚类
+            res_full_umap, k_best_full_umap, labels_best_full_umap = cluster_in_umap_space(emb2, args.k_lo if hasattr(args, 'k_lo') else 2, max(args.k_analysis_max, max(3, args.k_max)))
+            ka_csv = stats_dir / "best_config_k_analysis_umap_space.csv"
+            with open(ka_csv, "w", newline="", encoding="utf-8") as f:
+                w = csv.writer(f); w.writerow(["k", "silhouette", "davies_bouldin", "calinski_harabasz", "intra_over_inter"])
+                for k in sorted(res_full_umap.keys()):
+                    m = res_full_umap[k]
+                    w.writerow([k, m.get("silhouette", np.nan), m.get("davies_bouldin", np.nan), m.get("calinski_harabasz", np.nan), m.get("intra_over_inter", np.nan)])
+            print(f"保存 k 曲线 (UMAP 空间): {ka_csv}")
+            eval_func = eval_at_k_umap
+            clustering_space = "UMAP"
+        else:
+            print("[HIGH-DIM] 在原始高维空间中进行聚类")
+            eval_func = eval_at_k
+            clustering_space = "High-Dim"
+
+        # 为 k_min 到 k_max 范围内的每个 k 值生成可视化
+        k_results = {}
+        for k in range(args.k_min, args.k_max + 1):
+            if args.cluster_in_umap_space:
+                labels_k, m_k, sizes_k = eval_at_k_umap(emb2, k)
+            else:
+                labels_k, m_k, sizes_k = eval_at_k(Xs, k, args.metric)
+            k_results[k] = (labels_k, m_k, sizes_k)
+
+            # 生成 2D 可视化
+            if emb2 is not None:
+                plot_umap_2d(emb2, labels_k,
+                           title=f"UMAP 2D - best cfg k={k} (pool={pooling},d={d_model},L={n_layers},H={n_heads})",
+                           out_path=fig_dir / f"umap_2d_best_config_k{k}.png")
+
+            # 生成 3D 可视化
+            if emb3 is not None:
+                plot_umap_3d(emb3, labels_k,
+                           title=f"UMAP 3D - best cfg k={k} (pool={pooling},d={d_model},L={n_layers},H={n_heads})",
+                           out_path=fig_dir / f"umap_3d_best_config_k{k}.html")
+
+            # 打印控制台摘要
+            space_tag = "[UMAP-SPACE]" if args.cluster_in_umap_space else "[HIGH-DIM]"
+            print(f"{space_tag} [K{k}] sil={m_k['silhouette']:.4f} DB={m_k['davies_bouldin']:.4f} CH={m_k['calinski_harabasz']:.2f} Intra/Inter={m_k['intra_over_inter']:.4f} sizes={sizes_k}")
+
         # 视频采样导出（可选，需显式 --export-video-samples）
-        if args.export_video_samples:
+        # 默认使用 k_min 的聚类结果进行导出
+        if args.export_video_samples and args.k_min in k_results:
             out_root = Path("/home/johnny/action_ws/classify_res")
-            summary = export_video_samples(labels_k3, metas, out_root, max_per_cluster=100, seed=42)
+            labels_export, _, _ = k_results[args.k_min]
+            summary = export_video_samples(labels_export, metas, out_root, max_per_cluster=100, seed=42)
             # 写CSV汇总
             try:
                 sum_csv = out_root / "cluster_summary.csv"
@@ -787,13 +887,10 @@ def main():
                     w.writerow(["cluster_id", "total_samples", "exported_samples", "export_dir"])
                     for r in sorted(summary, key=lambda x: x["cluster_id"]):
                         w.writerow([r["cluster_id"], r["total_samples"], r["exported_samples"], r["export_dir"]])
-                print(f"[EXPORT] 写入汇总: {sum_csv}")
+                print(f"[EXPORT] 写入汇总 (k={args.k_min}): {sum_csv}")
             except Exception as e:
                 print(f"[WARN] 写入汇总CSV失败: {e}")
 
-        # 控制台摘要（便于外部收集）
-        print("[K3] sil=%.4f DB=%.4f CH=%.2f Intra/Inter=%.4f sizes=%s" % (m_k3['silhouette'], m_k3['davies_bouldin'], m_k3['calinski_harabasz'], m_k3['intra_over_inter'], sizes_k3))
-        print("[K5] sil=%.4f DB=%.4f CH=%.2f Intra/Inter=%.4f sizes=%s" % (m_k5['silhouette'], m_k5['davies_bouldin'], m_k5['calinski_harabasz'], m_k5['intra_over_inter'], sizes_k5))
         print("完成主流程（最佳配置）。输出目录:\n  - 图:", fig_dir, "\n  - 指标:", stats_dir)
         return
 
