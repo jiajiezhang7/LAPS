@@ -2,7 +2,7 @@
 # 快速批量生成能量曲线图的便捷脚本
 
 # 默认参数
-JSONL="/media/johnny/48FF-AA60/online_inference_output/epochs5_complete500_d01_m10_cb2048_stride4_vector/D01_20250810012331/stream_energy_velocity_token_diff_l2_mean.jsonl"
+JSONL="./data/YOUR_DATA_PATH"
 PARAMS="./video_action_segmenter/params_d02.yaml"
 SEGMENT_LENGTH=130
 NUM_PLOTS=50

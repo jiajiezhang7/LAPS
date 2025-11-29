@@ -267,7 +267,7 @@ class SegmentLevelAnalyzer:
 
 if __name__ == "__main__":
     # 分析输出文件夹
-    output_folder = "/media/johnny/48FF-AA60/online_inference_output/epochs5_complete500_d02_m10_cb2048_stride4_vector"
+    output_folder = "./data/YOUR_DATA_PATH"
 
     # 获取脚本所在目录的上级目录的 figure 子目录
     script_dir = Path(__file__).parent.parent

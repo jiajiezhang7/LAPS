@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-ROOT="/home/johnny/action_ws"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"  # Auto-detect workspace root
 VIDEOS_DIR="$ROOT/online_datasets/gtea/gtea/Videos"
 OUT_DIR="$ROOT/online_datasets/gtea/gtea/Videos_train.split1"
 SPLIT_FILE="$ROOT/online_datasets/gtea/gtea/splits/train.split1.bundle"

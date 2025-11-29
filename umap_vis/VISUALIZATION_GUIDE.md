@@ -33,7 +33,7 @@
 ```bash
 conda activate laps
 python umap_vis/scripts/sequence_model_embedding.py \
-  --data-dir /media/johnny/48FF-AA60/online_inference_output/epochs5_complete500_d02_m10_cb2048_stride4_vector \
+  --data-dir ./data/YOUR_DATA_PATH
   --fig-dir umap_vis/figure --stats-dir umap_vis/statistics \
   --metric cosine --neighbors 15 --min-dist 0.1 \
   --use-best-grid-config
@@ -43,7 +43,7 @@ python umap_vis/scripts/sequence_model_embedding.py \
 ```bash
 conda activate laps
 python umap_vis/scripts/sequence_model_embedding.py \
-  --data-dir /media/johnny/48FF-AA60/online_inference_output/epochs5_complete500_d02_m10_cb2048_stride4_vector \
+  --data-dir ./data/YOUR_DATA_PATH
   --fig-dir umap_vis/figure --stats-dir umap_vis/statistics \
   --metric cosine --neighbors 15 --min-dist 0.1 \
   --grid-search

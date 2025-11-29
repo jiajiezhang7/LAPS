@@ -4,7 +4,7 @@ from pathlib import Path
 
 from amplify.loaders.custom_segments_dataset import CustomSegmentsDataset
 
-ROOT_DIR = "/home/johnny/action_ws/data/preprocessed_gtea_m10/split1"
+ROOT_DIR = "./data/preprocessed_gtea_m10/split1"
 IMG_SHAPE = (480, 771)
 DATASET_NAMES = ["custom_segments"]
 COND_VIEWS = ["default"]

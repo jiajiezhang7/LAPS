@@ -11,10 +11,10 @@ auto_batch: true         # OOM 时自动将批量减半重试
 min_batch_size: 1
 
 # Source / destination
-source: /media/johnny/48FF-AA60/raw_videos_d02_segments
+source: ./data/raw_video_segments  # 修改为你的原始视频片段路径
 
 # 输出路径指定： 首先使用 output_dir，若 output_dir 未设置，则继续使用默认的 dest/dataset_name/extension 路径
-output_dir: /media/johnny/48FF-AA60/preprocessed_data_d02_m10
+output_dir: ./data/preprocessed_data  # 修改为你的输出路径
 dest: preprocessed_data
 dataset_name: whole_d02_segments
 skip_exist: true

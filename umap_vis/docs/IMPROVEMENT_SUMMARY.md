@@ -357,7 +357,7 @@ outliers = np.where(distances.mean(axis=1) > threshold)[0]
 ## 文件位置
 
 ```
-/home/johnny/action_ws/
+./
 ├── segment_level_umap_analysis.py      # 改进的分析脚本
 ├── umap_segment_2d_clusters.png        # 2D UMAP 可视化
 ├── umap_segment_3d_clusters.html       # 3D UMAP 交互式可视化
@@ -367,7 +367,7 @@ outliers = np.where(distances.mean(axis=1) > threshold)[0]
 
 数据位置：
 ```
-/media/johnny/48FF-AA60/online_inference_output/
+./data/YOUR_DATA_PATH
 └── epochs5_complete500_d02_m10_cb2048_stride4_vector/
     └── (多个日期文件夹)
         └── code_indices/               # 3886 个 JSON 文件

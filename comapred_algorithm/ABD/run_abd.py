@@ -94,7 +94,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         if isinstance(args.k, str) and args.k.lower() == "auto":
             # Try to read gt annotations to estimate average segment count
             if view in {"D01", "D02"}:
-                gt_dir = Path(f"/home/johnny/action_ws/datasets/gt_annotations/{view}")
+                gt_dir = Path(f"./datasets/gt_annotations/{view}")
                 if gt_dir.exists():
                     counts = []
                     for p in gt_dir.glob("*.json"):

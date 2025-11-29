@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BASE="/home/johnny/action_ws/datasets/output/figures"
-CLUSTERED_BASE="/home/johnny/action_ws/datasets/output/clustered_results"
+BASE="./datasets/output/figures"
+CLUSTERED_BASE="./datasets/output/clustered_results"
 
 process_label() {
   local label="$1"

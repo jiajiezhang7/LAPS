@@ -1,6 +1,6 @@
 from amplify.loaders.custom_segments_dataset import CustomSegmentsDataset
 
-root='/home/johnny/action_ws/data/preprocessed_gtea_m10/split1'
+root='./data/preprocessed_gtea_m10/split1'
 
 ds = CustomSegmentsDataset(root_dir=root, dataset_names=['custom_segments'])
 print('index_len=', len(ds.index_map))

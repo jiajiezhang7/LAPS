@@ -657,7 +657,7 @@ def main():
     p.add_argument("--pooling", type=str, default="mean", choices=["mean", "cls", "attn"])
     p.add_argument("--device", type=str, default="cpu")
     p.add_argument("--cluster-in-umap-space", action="store_true", help="在 UMAP 降维空间中进行聚类，而非原始高维空间（使聚类距离与可视化距离一致）")
-    p.add_argument("--export-video-samples", action="store_true", help="在 --use-best-grid-config 模式下，完成 k=3 聚类与可视化后，将每簇最多100个视频片段复制到 /home/johnny/action_ws/classify_res")
+    p.add_argument("--export-video-samples", action="store_true", help="在 --use-best-grid-config 模式下，完成 k=3 聚类与可视化后，将每簇最多100个视频片段复制到 ./classify_res")
 
     args = p.parse_args()
 
@@ -876,7 +876,7 @@ def main():
         # 视频采样导出（可选，需显式 --export-video-samples）
         # 默认使用 k_min 的聚类结果进行导出
         if args.export_video_samples and args.k_min in k_results:
-            out_root = Path("/home/johnny/action_ws/classify_res")
+            out_root = Path("./classify_res")
             labels_export, _, _ = k_results[args.k_min]
             summary = export_video_samples(labels_export, metas, out_root, max_per_cluster=100, seed=42)
             # 写CSV汇总

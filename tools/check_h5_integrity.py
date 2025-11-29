@@ -1,6 +1,6 @@
 import os, sys, glob, json
 import h5py
-root = "/home/johnny/action_ws/data/preprocessed_gtea_m10/split1"
+root = "./data/preprocessed_gtea_m10/split1"
 files = sorted(glob.glob(os.path.join(root, "*.hdf5")))
 print(f"[CHECK] HDF5 count: {len(files)}")
 errors = []

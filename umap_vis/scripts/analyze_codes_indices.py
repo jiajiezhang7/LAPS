@@ -196,7 +196,7 @@ def batch_extract_umap_vectors(folder_path: str, flatten: bool = False) -> Tuple
 
 if __name__ == "__main__":
     # 分析输出文件夹
-    output_folder = "/media/johnny/48FF-AA60/online_inference_output/epochs5_complete500_d02_m10_cb2048_stride4_vector/D02_20250811075805/code_indices"
+    output_folder = "./data/YOUR_DATA_PATH"
     
     print(f"分析文件夹: {output_folder}")
     analysis = analyze_all_json_files(output_folder)

@@ -31,12 +31,12 @@ def main(argv: list[str] | None = None) -> int:
     
     # 确定输入输出目录
     if args.input_dir is None:
-        input_dir = Path(f"/home/johnny/action_ws/datasets/gt_raw_videos/{args.view}")
+        input_dir = Path(f"./datasets/gt_raw_videos/{args.view}")
     else:
         input_dir = Path(args.input_dir)
     
     if args.output_dir is None:
-        output_dir = Path(f"/home/johnny/action_ws/comapred_algorithm/ABD/i3d_features/{args.view}")
+        output_dir = Path(f"./comapred_algorithm/ABD/i3d_features/{args.view}")
     else:
         output_dir = Path(args.output_dir)
     

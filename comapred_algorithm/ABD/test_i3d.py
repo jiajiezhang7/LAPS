@@ -66,7 +66,7 @@ def extract_i3d_features_limited(video_path, device="cuda:0", max_duration=30.0)
 
 def main():
     # Test on first D01 video
-    video_path = Path("/home/johnny/action_ws/datasets/gt_raw_videos/D01/D01_sample_1_seg001.mp4")
+    video_path = Path("./datasets/gt_raw_videos/D01/D01_sample_1_seg001.mp4")
     
     if not video_path.exists():
         print(f"Test video not found: {video_path}")

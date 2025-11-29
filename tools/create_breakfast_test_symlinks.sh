@@ -6,7 +6,7 @@ set -euo pipefail
 #   - Raw videos live under:  raw_videos/BreakfastII_15fps_qvga_sync/P03/{cam01,cam02,webcam01,webcam02}/P03_cereals.avi
 #   - For stereo01, raw lives under: raw_videos/.../P03/stereo/P03_cereals_ch{0,1}.avi (prefer ch1, fallback ch0)
 
-ROOT="/home/johnny/action_ws"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"  # Auto-detect workspace root
 VIDEOS_ROOT="$ROOT/online_datasets/breakfast/breakfast/raw_videos/BreakfastII_15fps_qvga_sync"
 OUT_DIR="$ROOT/online_datasets/breakfast/breakfast/Videos_test.split1"
 SPLIT_FILE="$ROOT/online_datasets/breakfast/breakfast/splits/test.split1.bundle"

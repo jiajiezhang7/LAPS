@@ -11,7 +11,7 @@ adam_betas: # betas for adam optimizer (momentum and variance)
   - 0.95
 amp: true # automatic mixed precision
 compile: false
-root_dir: /home/jay/action_ws/data/preprocessed_data_d01
+root_dir: ./data/preprocessed_data  # 修改为你的预处理数据路径
 train_split: 1.0
 log_interval: 500 # steps
 save_interval: 25 # epochs
@@ -22,7 +22,7 @@ run_name: default_run_name
 # Wandb
 use_wandb: true
 wandb_group: amplify
-wandb_entity: jerryzhang7-shanghaitech-university
+wandb_entity: YOUR_WANDB_ENTITY  # 修改为你的 WandB 实体名
 wandb_project: motion-tokenizer # 为实验指定一个项目名称
 
 # Debug
@@ -31,7 +31,7 @@ profile: false
 
 # Dataset
 libero_path: null # Absolute path to custom location of LIBERO datasets (defaults to LIBERO/libero/datasets)
-video_root: /home/jay/action_ws/data/raw_video_d01 # Optional: absolute path to the video root for CustomSegmentsDataset (used to locate original videos)
+video_root: ./data/raw_videos  # Optional: absolute path to the video root for CustomSegmentsDataset
 # video_root: null
 train_datasets:
   - custom_segments:traj0.8

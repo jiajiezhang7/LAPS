@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 Transpose GTEA precomputed features to time-major (T, D) for ABD.
-- Source: /home/johnny/action_ws/online_datasets/gtea/gtea/features/{stem}.npy (shape typically (2048, T))
-- Target: /home/johnny/action_ws/online_datasets/gtea/gtea/features_t/{stem}.npy (shape (T, 2048))
+- Source: ./online_datasets/gtea/gtea/features/{stem}.npy (shape typically (2048, T))
+- Target: ./online_datasets/gtea/gtea/features_t/{stem}.npy (shape (T, 2048))
 - Optionally restrict to stems listed in a split bundle file.
 """
 from __future__ import annotations
@@ -26,9 +26,9 @@ def read_split_stems(bundle_path: str | None) -> set[str] | None:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--src', default='/home/johnny/action_ws/online_datasets/gtea/gtea/features')
-    ap.add_argument('--dst', default='/home/johnny/action_ws/online_datasets/gtea/gtea/features_t')
-    ap.add_argument('--bundle', default='/home/johnny/action_ws/online_datasets/gtea/gtea/splits/test.split1.bundle', help='Optional split bundle to restrict stems')
+    ap.add_argument('--src', default='./online_datasets/gtea/gtea/features')
+    ap.add_argument('--dst', default='./online_datasets/gtea/gtea/features_t')
+    ap.add_argument('--bundle', default='./online_datasets/gtea/gtea/splits/test.split1.bundle', help='Optional split bundle to restrict stems')
     ap.add_argument('--overwrite', action='store_true')
     args = ap.parse_args()
 

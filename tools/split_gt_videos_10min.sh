@@ -8,7 +8,7 @@ eval "$(conda shell.bash hook)"
 conda activate laps
 
 # 项目根目录
-WORKSPACE_ROOT="/home/johnny/action_ws"
+WORKSPACE_ROOT="$(cd "$(dirname "$0")/.." && pwd)"  # Auto-detect workspace root
 SCRIPT_PATH="${WORKSPACE_ROOT}/tools/split_videos_by_10min.py"
 VIDEO_ROOT="${WORKSPACE_ROOT}/datasets/gt_raw_videos"
 

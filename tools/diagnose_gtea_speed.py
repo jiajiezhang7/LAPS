@@ -9,8 +9,8 @@ from amplify.utils.train import safe_collate
 
 from amplify.loaders.custom_segments_dataset import CustomSegmentsDataset
 
-ROOT = "/home/johnny/action_ws/data/preprocessed_gtea_m10/split1"
-VIDEO_ROOT = "/home/johnny/action_ws/online_datasets/gtea/gtea/Videos_train.split1"
+ROOT = "./data/preprocessed_gtea_m10/split1"
+VIDEO_ROOT = "./online_datasets/gtea/gtea/Videos_train.split1"
 IMG_SHAPE = (480, 771)
 BATCH_SIZE = 8
 NSTEPS = 10  # keep very small to avoid contention with current training

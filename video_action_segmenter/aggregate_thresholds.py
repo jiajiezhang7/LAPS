@@ -13,10 +13,10 @@ robust statistic (median by default).
 Usage:
   python -m video_action_segmenter.aggregate_thresholds \
     --view D01 \
-    --quantized-root /home/johnny/action_ws/datasets/output/segmentation_outputs/D01 \
-    --velocity-root  /home/johnny/action_ws/datasets/output/energy_sweep_out/D01 \
+    --quantized-root ./datasets/output/segmentation_outputs/D01 \
+    --velocity-root  ./datasets/output/energy_sweep_out/D01 \
     --label-threshold auto \
-    --output-json    /home/johnny/action_ws/datasets/output/energy_sweep_report/D01/best_threshold_quantized_token_diff.json
+    --output-json    ./datasets/output/energy_sweep_report/D01/best_threshold_quantized_token_diff.json
 
 Notes:
 - This script aligns windows by their integer index present in each JSONL.

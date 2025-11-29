@@ -79,7 +79,7 @@ def main():
     results = {}
     
     # 分析 GTEA 数据集
-    gtea_dir = "/home/johnny/action_ws/data/preprocessed_gtea_m10"
+    gtea_dir = "./data/preprocessed_gtea_m10"
     if os.path.exists(gtea_dir):
         results['GTEA'] = analyze_hdf5_files(gtea_dir, "GTEA")
     else:
@@ -87,10 +87,10 @@ def main():
     
     # 分析 D01 数据集（假设在外部存储）
     d01_candidates = [
-        "/media/johnny/48FF-AA60/D01",
+        "./data/YOUR_DATA_PATH",
         "/mnt/D01",
         "/data/D01",
-        "/home/johnny/D01"
+        "./data/D01"
     ]
     
     d01_found = False
@@ -105,10 +105,10 @@ def main():
     
     # 分析 D02 数据集
     d02_candidates = [
-        "/media/johnny/48FF-AA60/D02",
+        "./data/YOUR_DATA_PATH",
         "/mnt/D02",
         "/data/D02",
-        "/home/johnny/D02"
+        "./data/D02"
     ]
     
     d02_found = False
@@ -171,7 +171,7 @@ def main():
             print(f"📊 D02 vs D01 量级: {ratio:.1f}x")
     
     # 保存结果
-    output_file = "/home/johnny/action_ws/supplement_output/dataset_comparison.json"
+    output_file = "./supplement_output/dataset_comparison.json"
     Path(output_file).parent.mkdir(parents=True, exist_ok=True)
     with open(output_file, 'w') as f:
         json.dump(results, f, indent=2)

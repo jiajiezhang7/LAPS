@@ -19,10 +19,10 @@ from typing import Iterable, List, Optional
 
 
 DEFAULT_VIDEOS_ROOT = Path(
-    "/home/johnny/action_ws/datasets/output/segmentation_outputs/D02_LAPS"
+    "./datasets/output/segmentation_outputs/D02_LAPS"
 )
 DEFAULT_OUTPUT_BASE = Path(
-    "/home/johnny/action_ws/supplement_output/segmentor/energy_curves"
+    "./supplement_output/segmentor/energy_curves"
 )
 DEFAULT_TOTAL_SEC = 600
 DEFAULT_DURATION_SEC = 90
@@ -52,7 +52,7 @@ def iter_start_secs(total_sec: int, duration_sec: int, step_sec: int) -> Iterabl
 
 
 def build_paths(video_name: str) -> dict:
-    base = Path("/home/johnny/action_ws")
+    base = Path(".").resolve()  # Auto-detect workspace root
     paths = {
         "optical_flow_jsonl": base
         / f"datasets/output/segmentation_outputs/D02_optical_flow/{video_name}/stream_energy_optical_flow_mag_mean.jsonl",

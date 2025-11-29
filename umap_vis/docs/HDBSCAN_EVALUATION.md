@@ -2,8 +2,8 @@
 
 - 数据源聚合: attn_norm，度量: cosine
 - 网格搜索: min_cluster_size=[60, 80, 100, 120], min_samples=[3, 5, 8, 10, 15]
-- 结果 CSV: /home/johnny/action_ws/umap_vis/statistics/cluster_metrics_hdbscan_grid.csv
-- 最佳可视化: /home/johnny/action_ws/umap_vis/figure/umap_2d_hdbscan_best.png, /home/johnny/action_ws/umap_vis/figure/umap_3d_hdbscan_best.html
+- 结果 CSV: ./umap_vis/statistics/cluster_metrics_hdbscan_grid.csv
+- 最佳可视化: ./umap_vis/figure/umap_2d_hdbscan_best.png, ./umap_vis/figure/umap_3d_hdbscan_best.html
 
 ## 表格1：HDBSCAN 网格（口径A - 仅核心点，按 Silhouette 降序）
 

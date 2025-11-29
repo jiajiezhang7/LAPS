@@ -10,7 +10,7 @@ extract_hw.py
 
 用法：
   python amplify/tools/extract_hw.py \
-    --root_dir /media/johnny/Data/data_motion_tokenizer/whole_d01_videos_segments_40s \
+    --root_dir ./data/YOUR_DATA_PATH
     --config amplify/cfg/train_motion_tokenizer.yaml
 """
 import argparse

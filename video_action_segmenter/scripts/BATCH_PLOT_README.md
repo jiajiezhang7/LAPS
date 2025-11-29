@@ -89,7 +89,7 @@ video_action_segmenter/figures/batch_YYYYMMDD_HHMMSS/
 
 ```bash
 python -m video_action_segmenter.scripts.batch_plot_energy_segments \
-  --jsonl /media/johnny/48FF-AA60/online_inference_output/.../d02_stream_energy_quantized_token_diff_l2_mean.jsonl \
+  --jsonl ./data/YOUR_DATA_PATH
   --params ./video_action_segmenter/params_d02.yaml \
   --segment-length 100 \
   --num-plots 20
@@ -150,7 +150,7 @@ python -m video_action_segmenter.scripts.plot_energy_segment_from_jsonl_for_pape
 
 ```bash
 # 确保在正确的目录运行
-cd /home/johnny/action_ws
+cd /path/to/LAPS  # Change to your workspace
 
 # 激活正确的 conda 环境
 conda activate laps

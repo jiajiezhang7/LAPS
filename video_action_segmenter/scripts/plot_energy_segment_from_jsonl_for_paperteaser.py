@@ -3,14 +3,14 @@
 """
 从离线 energy JSONL 中随机抽取连续片段并绘制能量曲线（论文风格）。
 
-- 默认读取：/media/johnny/Data/data_motion_tokenizer/online_inference_results/D01_20250810001400/stream_energy_quantized_token_diff_l2_mean.jsonl
+- 默认读取：./data/YOUR_DATA_PATH
 - 片段长度：2000 个窗口（若不足则使用最长的连续片段）
 - 绘图风格与参数参照 params.yaml::energy（viz_style/theme/y_min/y_max/plot_size/smoothing 等）
 - 使用现有绘图函数：draw_energy_plot_enhanced / draw_energy_plot_enhanced_dual
 
 用法示例：
   python -m video_action_segmenter.scripts.plot_energy_segment_from_jsonl_for_paperteaser \
-    --jsonl /media/johnny/48FF-AA60/online_inference_output/epochs5_complete500_d02_m10_cb2048_stride4_vector/D02_20250812031659/d02_stream_energy_quantized_token_diff_l2_mean.jsonl \
+    --jsonl ./data/YOUR_DATA_PATH
     --params ./video_action_segmenter/params_d02.yaml \
     --segment-length 100 \
     --seed 100
@@ -115,7 +115,7 @@ def main():
     parser.add_argument(
         "--jsonl",
         type=str,
-        default="/media/johnny/Data/data_motion_tokenizer/online_inference_results/D01_20250810001400/stream_energy_quantized_token_diff_l2_mean.jsonl",
+        default="./data/YOUR_DATA_PATH",
         help="energy JSONL 路径",
     )
     parser.add_argument(

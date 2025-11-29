@@ -30,7 +30,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.view is None:
             print("必须提供 --view 或 --input-dir 之一")
             return 2
-        input_dir = Path(f"/home/johnny/action_ws/datasets/gt_raw_videos/{args.view}")
+        input_dir = Path(f"./datasets/gt_raw_videos/{args.view}")
     else:
         input_dir = Path(args.input_dir)
 
@@ -38,7 +38,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.view is None:
             print("必须提供 --view 或 --output-dir 之一")
             return 2
-        output_dir = Path(f"/home/johnny/action_ws/comapred_algorithm/ABD/hof_features/{args.view}")
+        output_dir = Path(f"./comapred_algorithm/ABD/hof_features/{args.view}")
     else:
         output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)

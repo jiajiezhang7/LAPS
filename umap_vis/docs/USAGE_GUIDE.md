@@ -260,7 +260,7 @@ A: 可以使用码序列作为离散符号进行分类，或使用向量进行�
 
 所有分析脚本和文档位于:
 ```
-/home/johnny/action_ws/
+./
 ├── analyze_codes_indices.py          # 基础分析脚本
 ├── advanced_codes_analysis.py        # 高级分析脚本
 ├── CODES_INDICES_ANALYSIS.md         # 详细文档
@@ -273,7 +273,7 @@ A: 可以使用码序列作为离散符号进行分类，或使用向量进行�
 
 数据位置:
 ```
-/media/johnny/48FF-AA60/online_inference_output/
+./data/YOUR_DATA_PATH
 └── epochs5_complete500_d02_m10_cb2048_stride4_vector/
     └── D02_20250811075805/
         └── code_indices/             # 46 个 JSON 文件

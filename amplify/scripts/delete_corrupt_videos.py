@@ -79,8 +79,8 @@ def main():
     parser.add_argument(
         '--report-path',
         type=str,
-        default='/home/johnny/johnny_ws/motion_tokenizer/corrupt_videos_report.txt',
-        help="Path to the corrupt videos report file.\n(default: /home/johnny/johnny_ws/motion_tokenizer/corrupt_videos_report.txt)"
+        default='./corrupt_videos_report.txt',
+        help="Path to the corrupt videos report file.\n(default: ./corrupt_videos_report.txt)"
     )
     parser.add_argument(
         '--dry-run',

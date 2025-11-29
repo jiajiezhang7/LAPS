@@ -1,7 +1,7 @@
 # check_and_clean_segments.py 默认配置
 # 可以根据数据情况调整阈值或其他参数
 
-root: /media/johnny/Data/data_motion_tokenizer/whole_d02_videos_segments_40s
+root: ./data/YOUR_DATA_PATH
 
 # ffmpeg 探针超时（秒）
 timeout: 20.0

@@ -9,7 +9,7 @@ VLM-based ICSS evaluation on clustered action segments.
 Config per user:
 - Multi-frame sampling with default N=8; long segments cap to 12~16 frames
 - Frame-level L2-norm weighting when aggregating frames
-- CLIP local model dir: /home/johnny/action_ws/clip-vit-base-patch32
+- CLIP local model dir: ./clip-vit-base-patch32
 - K selection by silhouette, k in [3, 10], metric='cosine'
 - Random baseline repeats R=5
 - Per-cluster pair cap: 100k
@@ -57,7 +57,7 @@ except Exception:
     from transformers import AutoProcessor as CLIPProcessor  # fallback
     _PROCESSOR_CLASS = 'AutoProcessor'
 
-ROOT = Path('/home/johnny/action_ws')
+ROOT = Path('.').resolve()  # Change to your workspace root
 DEFAULT_OUT = ROOT / 'datasets/output/vlm_icss_exp'
 CLIP_DIR = ROOT / 'clip-vit-base-patch32'
 SEQ_SCRIPT = ROOT / 'umap_vis/scripts/sequence_model_embedding.py'

@@ -206,10 +206,10 @@ def compare_datasets(stats1, stats2):
 def main():
     parser = argparse.ArgumentParser(description="统计 HDF5 数据集的样本量")
     parser.add_argument('--d01-dir', type=str, 
-                       default='/media/johnny/48FF-AA60/preprocessed_data_d01_m10',
+                       default='./data/YOUR_DATA_PATH
                        help='D01 数据集目录')
     parser.add_argument('--d02-dir', type=str,
-                       default='/media/johnny/48FF-AA60/preprocessed_data_d02_m10',
+                       default='./data/YOUR_DATA_PATH
                        help='D02 数据集目录')
     parser.add_argument('--output-json', type=str, default=None,
                        help='输出 JSON 文件路径（可选）')

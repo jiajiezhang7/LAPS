@@ -11,8 +11,8 @@ Compute optical flow energy (Dual TV-L1) for each video in a directory and expor
 Run example:
   conda run -n laps python -m video_action_segmenter.scripts.compute_optical_flow_energy \
     --view D01 \
-    --input-dir /home/johnny/action_ws/datasets/gt_raw_videos/D01 \
-    --output-root /home/johnny/action_ws/datasets/output/energy_sweep_out/D01 \
+    --input-dir ./datasets/gt_raw_videos/D01 \
+    --output-root ./datasets/output/energy_sweep_out/D01 \
     --target-fps 10 --ema-alpha 0.7 --resize-shorter 480
 """
 from pathlib import Path

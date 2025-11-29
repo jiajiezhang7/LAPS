@@ -38,7 +38,7 @@ BAD_KEYWORDS = (
     "error splitting the input into nal units",
 )
 
-DEFAULT_ROOT = "/media/johnny/Data/data_motion_tokenizer/whole_d01_videos_segments_40s"
+DEFAULT_ROOT = "./data/YOUR_DATA_PATH"
 CONFIG_PATH = (
     Path(__file__).resolve().parent.parent
     / "cfg"

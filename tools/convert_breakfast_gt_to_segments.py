@@ -4,11 +4,11 @@ Convert Breakfast frame-level groundTruth (.txt) to segment-level JSON with seco
 - Videos are 15 fps (BreakfastII_15fps_qvga_sync). We try to read actual fps and frame count via OpenCV; if unavailable, fallback to fps=15 and frame_count=len(labels).
 - Input split file lines look like: P03_cam01_P03_cereals.txt
 - Raw videos (symlinked) are expected under:
-    /home/johnny/action_ws/online_datasets/breakfast/breakfast/Videos_test.split1/{stem}.avi
+    ./online_datasets/breakfast/breakfast/Videos_test.split1/{stem}.avi
 - GroundTruth files under:
-    /home/johnny/action_ws/online_datasets/breakfast/breakfast/groundTruth/{stem}.txt
+    ./online_datasets/breakfast/breakfast/groundTruth/{stem}.txt
 - Output JSON per video to:
-    /home/johnny/action_ws/online_datasets/breakfast/gt_segments_json/test.split1/{stem}_segments.json
+    ./online_datasets/breakfast/gt_segments_json/test.split1/{stem}_segments.json
 Output JSON schema (class-agnostic):
 {
   "video": "<stem>.avi",
@@ -30,7 +30,7 @@ try:
 except Exception:
     cv2 = None  # fallback later
 
-ROOT = Path('/home/johnny/action_ws')
+ROOT = Path('.').resolve()  # Change to your workspace root
 VID_DIR_DEFAULT = ROOT / 'online_datasets/breakfast/breakfast/Videos_test.split1'
 GT_DIR_DEFAULT = ROOT / 'online_datasets/breakfast/breakfast/groundTruth'
 SPLIT_DEFAULT = ROOT / 'online_datasets/breakfast/breakfast/splits/test.split1.bundle'

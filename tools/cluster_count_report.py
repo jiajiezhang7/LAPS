@@ -5,7 +5,7 @@ from collections import Counter
 
 # Labels to process
 LABELS = ["online_d01", "online_d02"]
-BASE = Path("/home/johnny/action_ws/datasets/output/figures")
+BASE = Path("./datasets/output/figures")
 
 
 def summarize_label(label: str) -> None:

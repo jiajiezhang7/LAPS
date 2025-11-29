@@ -3,7 +3,7 @@ import numpy as np
 from torch.utils.data import DataLoader
 from amplify.loaders.custom_segments_dataset import CustomSegmentsDataset
 
-root='/home/johnny/action_ws/data/preprocessed_gtea_m10/split1'
+root='./data/preprocessed_gtea_m10/split1'
 
 ds = CustomSegmentsDataset(root_dir=root, dataset_names=['custom_segments'], img_shape=(480,771), true_horizon=16, track_pred_horizon=16, keys_to_load=['tracks','images'])
 print('index_len=', len(ds.index_map))

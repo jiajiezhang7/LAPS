@@ -10,9 +10,9 @@ Offline segmentation from pre-computed energy JSONL files.
 
 Example:
   conda run -n laps python tools/offline_segment_from_energy.py \
-    --energy-root /home/johnny/action_ws/output/gtea \
-    --pred-root /home/johnny/action_ws/output/gtea/segments_train_split1 \
-    --threshold-json /home/johnny/action_ws/output/gtea/thresholds/split1/best_threshold_quantized_token_diff.json \
+    --energy-root ./output/gtea \
+    --pred-root ./output/gtea/segments_train_split1 \
+    --threshold-json ./output/gtea/thresholds/split1/best_threshold_quantized_token_diff.json \
     --threshold-key optical_flow_mag_mean_best.best_f1.thr \
     --target-fps 10 --stride 4 --hysteresis-ratio 0.95 --up-count 2 --down-count 2 --cooldown-windows 1 \
     --max-duration-seconds 2.0 --stem-prefixes S2_ S3_ S4_ --use-smoothing --smooth-method ema --smooth-alpha 0.7 --smooth-window 3

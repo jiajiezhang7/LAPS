@@ -1,44 +1,65 @@
+# Python
 __pycache__/
 *.pyc
-*.pth
-.checkpoints/
-checkpoints/
-*.log
+*.pyo
+*.egg-info/
+.eggs/
+*.egg
 
-# venv
+# Virtual environments
 .venv/
 .env/
+venv/
+env/
 
-# data
-amplify_motion_tokenizer/data/
+# IDE
+.idea/
+.vscode/
+.windsurf/
+.augment/
+*.swp
+*.swo
 
-# experiment results
-amplify_motion_tokenizer/inference_outputs/
-video_action_segmenter/inference_outputs/
-amplify_motion_tokenizer/action_classification/seq_embed/
-action_classification/seq_embed_infer/
-action_classification/analysis/out/
-action_classification/models/
-action_classification/analysis/code_indices/
-amplify_motion_tokenizer/analysis/
-action_classification/analysis/
-amplify/outputs/
+# Model weights and checkpoints
+*.pth
+*.pt
+checkpoints/
+.checkpoints/
+
+# Data directories
+data/
+datasets/
+online_datasets/
+label_data/
+
+# Output directories
+output/
 outputs/
 wandb/
-data/
-action_classification/results/
-label_data/
+stream_infer_results/
+supplement_output/
+
+# Module-specific outputs
+video_action_segmenter/inference_outputs/
+video_action_segmenter/figures/
+video_action_segmenter/energy_sweep_out/
+video_action_segmenter/energy_sweep_report/
 umap_vis/figure/
 umap_vis/statistics/
 umap_vis/classify_res/
-datasets/
-video_action_segmenter/figures/
-stream_infer_results/
+amplify/outputs/
+
+# Feature caches
+comapred_algorithm/ABD/hof_features/
+comapred_algorithm/ABD/i3d_features/
+
+# Logs
+*.log
+
+# Large model files
 clip-vit-base-patch32/
 clip-vit-large-patch14/
-comapred_algorithm/ABD/hof_features/
-online_datasets/
-output/
-supplement_output/
-comapred_algorithm/
-comapred_algorithm/OTAS
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -19,7 +19,7 @@ Output structure under --output:
   The JSON follows LAPS format: { video, segments[{start_sec,end_sec}], fps, processed_at }
 
 Assumptions:
-  - Raw videos are available under --raw-dir (default: /home/johnny/action_ws/datasets/gt_raw_videos/{VIEW})
+  - Raw videos are available under --raw-dir (default: ./datasets/gt_raw_videos/{VIEW})
   - We convert frame indices to seconds via sec = frame_idx / fps
   - Segments are intervals between consecutive boundaries (including [0, first_bdy) and [last_bdy, video_end])
 """

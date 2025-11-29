@@ -295,8 +295,8 @@ def main():
     parser.add_argument(
         'root_dir',
         nargs='?',
-        default='/media/johnny/Data/data_motion_tokenizer/whole_d02_videos_segments_40s',
-        help='要扫描的根目录 (默认: /media/johnny/Data/data_motion_tokenizer/whole_d02_videos_segments_40s)'
+        default='./data/YOUR_DATA_PATH
+        help='要扫描的根目录 (默认: ./data/YOUR_DATA_PATH
     )
     
     parser.add_argument(
