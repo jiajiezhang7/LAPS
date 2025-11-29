@@ -181,9 +181,9 @@ If you find this work useful, please cite:
 ## License
 
 - This project: MIT License
-- `amplify/`: MIT License (based on [AMPLIFY](https://github.com/princeton-vl/amplify))
+- `amplify/`: MIT License (based on [AMPLIFY](https://github.com/pairlab/AMPLIFY))
 
 ## Acknowledgments
 
-- [AMPLIFY](https://github.com/princeton-vl/amplify) for the Motion Tokenizer framework
+- [AMPLIFY](https://github.com/pairlab/AMPLIFY) for the Motion Tokenizer framework
 - [CoTracker](https://github.com/facebookresearch/co-tracker) for keypoint tracking
