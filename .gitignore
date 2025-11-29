@@ -54,7 +54,7 @@ amplify/outputs/
 # Feature caches
 comapred_algorithm/ABD/hof_features/
 comapred_algorithm/ABD/i3d_features/
-
+/home/johnny/action_ws/supplement_output
 # Logs
 *.log
 /home/johnny/action_ws/vlm_model

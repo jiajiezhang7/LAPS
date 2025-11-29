@@ -164,32 +164,20 @@ LAPS/
 | `energy.source` | params.yaml | Energy source: `quantized` \| `velocity` |
 | `energy.mode` | params.yaml | Energy mode: `token_diff_l2_mean` (recommended) |
 
-## Baselines
-
-### ABD (Activity Boundary Detection)
-
-```bash
-python -m comapred_algorithm.ABD.run_abd \
-  --input-dir ./data/raw_videos \
-  --output-dir ./output/ABD_results \
-  --features-dir ./data/hof_features \
-  --k auto
-```
-
-### OTAS (Online Temporal Action Segmentation)
-
-See `comapred_algorithm/OTAS/README.md` for setup instructions.
 
 ## Citation
 
 If you find this work useful, please cite:
 
 ```bibtex
-@article{laps2025,
-  title={LAPS: Latent Action-based Primitive Segmentation for Industrial VLA},
-  author={Your Name},
-  journal={arXiv preprint},
-  year={2025}
+@misc{zhang2025observationactionlatentactionbased,
+      title={From Observation to Action: Latent Action-based Primitive Segmentation for VLA Pre-training in Industrial Settings}, 
+      author={Jiajie Zhang and Sören Schwertfeger and Alexander Kleiner},
+      year={2025},
+      eprint={2511.21428},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2511.21428}, 
 }
 ```
 
