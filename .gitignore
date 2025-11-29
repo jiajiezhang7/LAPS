@@ -38,7 +38,9 @@ outputs/
 wandb/
 stream_infer_results/
 supplement_output/
-
+tools/
+umap_vis/docs/
+video_action_segmenter/docs
 # Module-specific outputs
 video_action_segmenter/inference_outputs/
 video_action_segmenter/figures/
@@ -55,11 +57,11 @@ comapred_algorithm/ABD/i3d_features/
 
 # Logs
 *.log
-
+/home/johnny/action_ws/vlm_model
 # Large model files
 clip-vit-base-patch32/
 clip-vit-large-patch14/
-
+docs/
 # OS files
 .DS_Store
 Thumbs.db
