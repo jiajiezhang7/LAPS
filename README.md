@@ -146,10 +146,7 @@ LAPS/
 │   └── scripts/               # Analysis scripts
 ├── tools/                     # Evaluation tools
 │   └── eval_segmentation.py   # Segmentation evaluation
-├── comapred_algorithm/        # Baseline methods
-│   ├── ABD/                   # Activity Boundary Detection
-│   └── OTAS/                  # Online Temporal Action Segmentation
-└── docs/                      # Documentation
+└── test_env.py                # Environment verification script
 ```
 
 ## Configuration
@@ -185,7 +182,6 @@ If you find this work useful, please cite:
 
 - This project: MIT License
 - `amplify/`: MIT License (based on [AMPLIFY](https://github.com/princeton-vl/amplify))
-- `comapred_algorithm/OTAS/`: MIT License
 
 ## Acknowledgments
 
