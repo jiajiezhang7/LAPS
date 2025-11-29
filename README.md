@@ -1,6 +1,9 @@
 # LAPS: Latent Action-based Primitive Segmentation
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![arXiv](https://img.shields.io/badge/arXiv-2511.21428-b31b1b.svg)](https://arxiv.org/abs/2511.21428)
+
+This repo contains the official implementation of **[From Observation to Action: Latent Action-based Primitive Segmentation for VLA Pre-training in Industrial Settings](https://arxiv.org/abs/2511.21428)**.
 
 > An end-to-end, unsupervised pipeline for automatic action primitive discovery from raw industrial videos. LAPS segments semantically coherent action primitives and their latent representations for VLA (Vision-Language-Action) pre-training.
 
@@ -13,13 +16,7 @@
 
 ## Pipeline Overview
 
-```
-Phase 1: Keypoint Tracking     Phase 2: Motion Tokenization      Phase 3: Unsupervised Discovery
-      (CoTracker)              & Action Segmentation                  (Clustering & VLM)
-          ↓                            ↓                                    ↓
-    Raw Video  →  Keypoint Tracks  →  Latent Codes  →  Action Primitives  →  Action Library
-                                       + Energy
-```
+![LAPS Pipeline](resources/pipeline_dataflow2_crop.png)
 
 ## Installation
 
