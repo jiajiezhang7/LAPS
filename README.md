@@ -1,0 +1,153 @@
+# LAPS: Latent Action-based Primitive Segmentation
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![arXiv](https://img.shields.io/badge/arXiv-2511.21428-b31b1b.svg)](https://arxiv.org/abs/2511.21428)
+
+This repo contains the official implementation of **[From Observation to Action: Latent Action-based Primitive Segmentation for VLA Pre-training in Industrial Settings](https://arxiv.org/abs/2511.21428)**.
+
+> An end-to-end, unsupervised pipeline for automatic action primitive discovery from raw industrial videos. LAPS segments semantically coherent action primitives and their latent representations for VLA (Vision-Language-Action) pre-training.
+
+## Key Features
+
+- **Unsupervised**: No manual annotations required
+- **End-to-end**: From raw video to structured action primitives
+- **Real-time capable**: Online streaming inference support
+- **Latent Action Energy**: Novel metric for action boundary detection in abstract latent space
+
+## Pipeline Overview
+
+![LAPS Pipeline](resources/pipeline_dataflow2_crop.png)
+
+## Installation
+
+### Requirements
+
+- Python 3.10+
+- PyTorch 2.0+
+- CUDA 11.8+ (recommended)
+
+### Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/YOUR_USERNAME/LAPS.git
+cd LAPS
+
+# Create conda environment
+conda create -n laps python=3.10
+conda activate laps
+
+# Install dependencies
+pip install -r amplify/requirements.txt
+
+# Optional: Install CoTracker (for keypoint tracking)
+pip install git+https://github.com/facebookresearch/co-tracker.git
+```
+
+## Quick Start
+
+### 1. Data Preparation
+
+Organize your raw videos:
+```
+data/
+├── raw_videos/           # Your raw video files
+│   ├── video1.mp4
+│   └── video2.mp4
+├── raw_video_segments/   # Split video segments (for training)
+└── preprocessed_data/    # Output of preprocessing
+```
+
+### 2. Preprocess Videos (Phase 1)
+
+Extract keypoint trajectories using CoTracker:
+
+```bash
+# Edit config: amplify/cfg/preprocessing/preprocess_my_segments.yaml
+# Set: source, output_dir
+
+cd amplify
+python -m preprocessing.preprocess_my_segments
+```
+
+### 3. Train Motion Tokenizer (Phase 2a)
+
+```bash
+# Edit config: amplify/cfg/train_motion_tokenizer.yaml
+# Set: root_dir, video_root, wandb_entity, run_name
+
+python amplify/train_motion_tokenizer.py \
+  root_dir=./data/preprocessed_data \
+  run_name=my_experiment \
+  num_epochs=5 \
+  batch_size=8
+```
+
+### 4. Run Action Segmentation (Phase 2b)
+
+```bash
+# Edit config: video_action_segmenter/params.yaml
+# Set: checkpoint_path, input.dir, segmentation.output_dir
+
+python -m video_action_segmenter.stream_inference \
+  --params video_action_segmenter/params.yaml
+```
+
+**Output:**
+- Segmented video clips: `output/segmentation_outputs/*/segmented_videos/*.mp4`
+- Latent code indices: `output/segmentation_outputs/*/code_indices/*.codes.json`
+
+## Project Structure
+
+```
+LAPS/
+├── amplify/                    # Motion Tokenizer framework
+│   ├── amplify/               # Core models and utilities
+│   ├── cfg/                   # Configuration files
+│   ├── preprocessing/         # Data preprocessing
+│   └── train_motion_tokenizer.py
+├── video_action_segmenter/    # Action segmentation module
+│   ├── stream_inference.py    # Main inference entry
+│   ├── stream_utils/          # Streaming utilities
+│   └── params.yaml            # Configuration template
+└── resources/                 # Images and assets used in docs
+```
+
+## Configuration
+
+### Key Parameters
+
+| Parameter | File | Description |
+|-----------|------|-------------|
+| `target_fps` | params.yaml | Target frame rate (default: 10) |
+| `stride` | params.yaml | Window stride (default: 4) |
+| `codebook_size` | train_motion_tokenizer.yaml | FSQ codebook size (default: 2048) |
+| `energy.source` | params.yaml | Energy source: `quantized` \| `velocity` |
+| `energy.mode` | params.yaml | Energy mode: `token_diff_l2_mean` (recommended) |
+
+
+## Citation
+
+If you find this work useful, please cite:
+
+```bibtex
+@misc{zhang2025observationactionlatentactionbased,
+      title={From Observation to Action: Latent Action-based Primitive Segmentation for VLA Pre-training in Industrial Settings}, 
+      author={Jiajie Zhang and Sören Schwertfeger and Alexander Kleiner},
+      year={2025},
+      eprint={2511.21428},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2511.21428}, 
+}
+```
+
+## License
+
+- This project: MIT License
+- `amplify/`: MIT License (based on [AMPLIFY](https://github.com/pairlab/AMPLIFY))
+
+## Acknowledgments
+
+- [AMPLIFY](https://github.com/pairlab/AMPLIFY) for the Motion Tokenizer framework
+- [CoTracker](https://github.com/facebookresearch/co-tracker) for keypoint tracking

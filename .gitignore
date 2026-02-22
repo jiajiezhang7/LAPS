@@ -1,0 +1,67 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.eggs/
+*.egg
+
+# Virtual environments
+.venv/
+.env/
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+.windsurf/
+.augment/
+*.swp
+*.swo
+
+# Model weights and checkpoints
+*.pth
+*.pt
+checkpoints/
+.checkpoints/
+
+# Data directories
+data/
+datasets/
+online_datasets/
+label_data/
+
+# Output directories
+output/
+outputs/
+wandb/
+stream_infer_results/
+supplement_output/
+tools/
+umap_vis/docs/
+video_action_segmenter/docs
+# Module-specific outputs
+video_action_segmenter/inference_outputs/
+video_action_segmenter/figures/
+video_action_segmenter/energy_sweep_out/
+video_action_segmenter/energy_sweep_report/
+umap_vis/figure/
+umap_vis/statistics/
+umap_vis/classify_res/
+amplify/outputs/
+
+# Feature caches
+comapred_algorithm/ABD/hof_features/
+comapred_algorithm/ABD/i3d_features/
+/home/johnny/action_ws/supplement_output
+# Logs
+*.log
+/home/johnny/action_ws/vlm_model
+# Large model files
+clip-vit-base-patch32/
+clip-vit-large-patch14/
+docs/
+# OS files
+.DS_Store
+Thumbs.db

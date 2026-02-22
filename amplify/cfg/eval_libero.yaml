@@ -1,0 +1,29 @@
+amplify_checkpoint: null
+dataset:
+  - libero_10
+
+# Provide an absolute path to the LIBERO datasets
+libero_path: null
+
+max_steps: 500
+temporal_agg: true
+
+# Env
+n_envs: 10
+
+# Logging
+use_wandb: false
+# project_name: null
+wandb_project: null
+# entity_name: null
+wandb_entity: null
+# group_name: null
+wandb_group: null
+run_name: null
+
+# Visualization
+vis_traj: false # visualize predicted point tracks
+img_size: 128
+
+save_rollout_video: false
+compile: false

@@ -1,0 +1,123 @@
+# Train
+batch_size: 256 # batch size, will accumulate gradients if greater than gpu_max_bs
+gpu_max_bs: 64 # max batch size for gpu
+generate_video: true
+num_epochs: 100
+log_interval: 100 # steps
+num_workers: 4
+save_interval: 25 # epochs
+eval_interval: 0 # epochs
+use_wandb: false
+wandb_group: null
+wandb_entity: null
+wandb_project: null
+run_name: default_run_name
+checkpoint: null # path to continue training a checkpoint or evaluate it
+resume: true # if no checkpoint is provided, resume from the latest checkpoint in the run directory (make sure run name is correct!)
+compile: false
+root_dir: null
+
+# Debug
+quick: false # check train and val loop quickly
+profile: false
+
+# Datasets
+train_datasets:
+  # - libero_10:traj0.9
+  # - libero_object:traj0.9
+
+val_datasets:
+  # - libero_10:traj-0.1
+  # - libero_object:traj-0.1
+
+task_names: null
+
+augmentations:
+  color_jitter: false
+  color_jitter_strength: 0.3
+  gaussian_blur: false
+  gaussian_blur_kernel_size: [3, 5, 7]
+  gaussian_blur_sigma_min: 0.1
+  gaussian_blur_sigma_max: 2.0
+  gaussian_blur_p: 0.5
+
+eval:
+  suites:
+    null
+    # - libero_10
+    # - libero_90
+    # - libero_spatial
+    # - libero_goal
+    # - libero_object
+  n_envs: 1
+  max_steps: 500
+  temporal_agg: true
+  action_dim: 7
+  vis_traj: true
+  log_detailed_stats: false
+  img_size: 128
+
+forward_dynamics:
+  vision_encoder:
+    model_name: resnet18
+    frozen: true
+    lr_multiplier: 1.0
+    get_patches: true
+    get_cls_and_patches: false
+    patch_pooling: null # null, avg
+
+  text_encoder:
+    size: small
+    frozen: true
+    return_all_tokens: false
+    use_preprocessed_embs: false
+
+  motion_tokenizer:
+    frozen: true
+    checkpoint: null # pls do not change this
+    use_codes: true # use the tokenizer codes instead of (new) learned embeddings
+
+  inverse_dynamics:
+    load: false # don't load action decoder by default, since it is unused for codebook loss
+    frozen: true
+    checkpoint: null
+
+  transformer: # trunk
+    n_layer: 8 # number of layers
+    n_head: 8 # number of attention heads
+    dropout: 0.1 # dropout rate (how often to zero out tokens in each layer of the transformer). Helps mitigate overfitting
+    bias: false # whether to include bias in the attention mechanism matrix multiplication
+
+  # General
+  ar_sampling: argmax # argmax, topk
+  modality_emb: false # add a learned projection of the modality index. per view tokenization currently breaks this
+  cross_attend_cond: false # use cross attention instead of self attention for conditioning
+  cond_on_proprio: false # condition on proprioception
+  proprio_dim: 9
+
+  # Loss
+  loss_fn: codebook_ce # cross entropy across codebook
+  loss_weights:
+    weighted_ce: 0.05
+    vis: 1.0e-4
+    # demodata_traj_agentview: 10.0
+    # playdata_traj_agentview: 10.0
+    # demodata_traj_eye_in_hand: 1.0
+    # playdata_traj_eye_in_hand: 1.0
+    demodata_actions: 1.0
+    playdata_actions: 1.0
+    traj_velocities: 1.0
+
+  loss_biases:
+    actions: 0.0 # this might be needed since action loss can go negative when log probs are unnormalized
+
+# Optimizer
+optim:
+  lr_schedule: null
+  clip_grad: 1.0 # limit the norm of the gradients (0 = no clipping)
+  lr: 1.0e-04
+  weight_decay: 0.0 # penalize norm of the weights
+  adam_betas: # betas for adam optimizer (momentum and variance)
+    - 0.9
+    - 0.95
+  automatic_mixed_precision: true # speed up training by using 16 bit precision

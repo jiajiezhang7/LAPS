@@ -1,0 +1,27 @@
+mode: tracks # gt_segmentation, gt_depth, depth, tracks, sam2, text
+
+n_tracks: 400
+init_queries: uniform
+reinit: true # track next horizon steps starting at each frame
+horizon: 16 # only used if reinit is true
+batch_size: 8 # only used if reinit is true
+dim_order: 'tchw'
+coord_format: cotracker # cotracker (0,127), atm (0,1), standard (-1,1)
+img_size: 128
+
+text_encoder:
+  size: small
+  frozen: true
+  return_all_tokens: false
+
+source: LIBERO/libero/datasets
+dest: preprocessed_data
+suite: libero_10
+skip_exist: true
+
+range: null # e.g. 0-9 to process tasks 0 to 9 only, null for all tasks
+
+# depth (not used for AMPLIFY)
+metric_depth: false
+depth_encoder: vitl
+depth_checkpoint_dir: checkpoints
